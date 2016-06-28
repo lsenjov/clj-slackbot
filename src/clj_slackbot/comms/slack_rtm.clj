@@ -3,7 +3,10 @@
             [clj-http.client :as http]
             [gniazdo.core :as ws]
             [cheshire.core :refer [parse-string generate-string]]
-            [clj-slackbot.util :as util]))
+            [clj-slackbot.util :as util]
+            [taoensso.timbre :as log]
+            [clj-slackbot.names :as names]
+            ))
 
 (def ^:private rtm-socket-url
   "https://slack.com/api/rtm.start")
@@ -39,20 +42,37 @@
   (when-let [text (:text data)]
     (.startsWith text prefix)))
 
+(def ^:private counter (atom 0))
+(def ^:private next-id
+  (fn [] (swap! counter inc)))
+
+(defn- convert-to-out
+  "Converts a message before sending to out"
+  [msg]
+  (log/info "Converting message:" msg)
+  (let [out {:id (next-id)
+             :type "message"
+             :channel (names/convert-back (get-in msg [:channel]))
+             :text (-> msg
+                       :message
+                       ;util/format-result-for-slack
+                       )
+             }]
+    (log/info "Converted to:" out)
+    out))
+
 (defn start [{:keys [api-token prefix]}]
   (let [cin (async/chan 10)
         cout (async/chan 10)
         url (get-websocket-url api-token)
         counter (atom 0)
-        next-id (fn []
-                  (swap! counter inc))
         shutdown (fn []
                    (async/close! cin)
                    (async/close! cout))]
     (when (clojure.string/blank? url)
       (throw (ex-info "Could not get RTM Websocket URL" {})))
 
-    (println ":: got websocket url:" url)
+    (log/debug "got websocket url:" url)
 
     ;; start a loop to process messages
     (go-loop [[in out] (connect-socket url)]
@@ -63,21 +83,17 @@
         ;; we should do something smarter, may be try and reconnect
         (if (nil? v)
           (do
-            (println "A channel returned nil, may be its dead? Leaving loop.")
+            (log/debug "A channel returned nil, may be its dead? Leaving loop.")
             (shutdown))
           (do
             (if (= p cout)
               ;; the user sent us something, time to send it to the remote end point
-              (async/>! out {:id      (next-id) :type "message"
-                             :channel (get-in v [:meta :channel])
-                             :text    (-> v
-                                          :evaluator/result
-                                          util/format-result-for-slack)})
+              (async/>! out (convert-to-out v))
 
               ;; the websocket has sent us something, figure out if its of interest
               ;; to us, and if it is, send it to the evaluator
               (do
-                (println ":: incoming:" v)
+                (log/trace "Incoming:" v)
                 (when (can-handle? v prefix)
                   (async/>! cin {:input (subs (:text v) 1)
                                  :meta  v}))))

@@ -1,4 +1,7 @@
-(ns clj-slackbot.util)
+(ns clj-slackbot.util
+  (:require [taoensso.timbre :as log]
+            )
+  )
 
 (defn format-result-for-slack [r]
   (if (:status r)
@@ -17,6 +20,7 @@
 
 
 (defn safe-resolve [kw]
+  (log/trace "safe-resolve kw:" kw)
   (let [user-ns (symbol (namespace kw))
         user-fn (symbol (name kw))]
       (try

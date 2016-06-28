@@ -11,7 +11,14 @@
                  [environ "1.0.0"]
                  [stylefruits/gniazdo "0.4.1"]
                  [ring/ring-defaults "0.1.5"]
-                 [http-kit "2.1.18"]]
+                 [http-kit "2.1.18"]
+
+                 ;; Logging
+                 [com.taoensso/timbre "4.3.1"]
+
+                 ;; Slack API
+                 [org.julienxx/clj-slack "0.5.4"]
+                 ]
   :plugins [[lein-ring "0.8.13"]]
   :uberjar-name "clj-slackbot.jar"
   :main clj-slackbot.core
