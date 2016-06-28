@@ -26,8 +26,14 @@
               res (evaluator/eval-expr form)]
           (log/info ":: form >> " input)
           (log/info ":: => " res)
-          ;(>! out (assoc form :evaluator/result res))
-          (>! out res)
+          ; Do we have a list/vector of messages? If so, loop through and send each one through
+          (if (sequential? res)
+            (loop [queue res]
+              (when (> (count queue) 0)
+                (>! out (first queue))
+                (recur (rest queue))))
+            (>! out res)
+            )
           (recur [in out stop]))
 
         ;; something wrong happened, re init

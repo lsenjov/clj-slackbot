@@ -68,6 +68,11 @@
   [^String n]
   (if-let [id (get @backList n)]
     ;; We found it, return the id
-    id
+    (do
+      (log/info "Converting back name:" n)
+      id)
     ;; Couldn't find, return the original name
-    n))
+    (do
+      (log/info "Couldn't convert back name:" n)
+      n)
+    ))
