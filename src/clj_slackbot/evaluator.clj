@@ -1,9 +1,12 @@
 (ns clj-slackbot.evaluator
   (:require [clojail.core :refer [sandbox]]
             [clojail.testers :refer [secure-tester-without-def blanket]]
-            [clj-slackbot.games.testGame :as testGame]
             [taoensso.timbre :as log]
             [clj-slackbot.names :as names]
+
+            ;; Add games below here
+            [clj-slackbot.games.testGame :as testGame]
+            [clj-slackbot.games.werewolf :as werewolf]
             )
   (:import java.io.StringWriter))
 
