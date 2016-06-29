@@ -112,6 +112,14 @@
    }
   )
 
+(defn repo-link
+  [metaData]
+  {
+    :channel (:channel metaData)
+    :message "https://github.com/lsenjov/clj-slackbot"
+  }
+  )
+
 (defn- eval-expr-inner
   "Actually do something with the string. Does nothing right now"
   [{input :input {channel :channel user :user :as metaData} :meta :as s}]
@@ -135,6 +143,7 @@
                "start" (:message (swap! games start-game metaData (second words)))
                "end" (:message (swap! games end-game metaData))
                "help" (get-help metaData (rest words))
+               "repo" (repo-link metaData)
                (:message (swap! games send-command metaData words))
                )
              )
