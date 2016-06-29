@@ -91,21 +91,52 @@
       i
       (list i))))
 
+(defn get-help
+  "Gets general help, or help for a certain game"
+  [metaData words]
+  {:channel (:user metaData)
+   :message (if (= (count words) 0)
+              "Possible commands:
+              `!start gameType` Starts a game of gameType
+              `!end` ends the current game"
+              (case (first words)
+                "list" "GameTypes: testGame" ;;TODO Add ways to automatically get all games
+                (str "Unknown argument: "
+                     (first words)
+                     ". Possible arguments: list")
+                )
+              )
+   }
+  )
+
 (defn- eval-expr-inner
   "Actually do something with the string. Does nothing right now"
   [{input :input {channel :channel user :user :as metaData} :meta :as s}]
   (log/info "eval-expr is:" s)
   (log/info "eval-expr. channel is:" channel " user is:" user)
-  (let [words (clojure.string/split input #" ")]
-    (map (partial merge {:channel channel :message "ERROR: No message"})
-         (conv-to-out?
-           (case (first words)
-                       "start" (:message (swap! games start-game metaData (second words)))
-                       "end" (:message (swap! games end-game metaData))
-                       (:message (swap! games send-command metaData words))
-                       )
-                     )
-         )
+  (if (= (first input) \#)
+    ;; If the first argument is a channel, substitute the channel
+    (recur (-> s
+               ;; So we can find where this actually came from, not the modified one
+               (assoc-in [:from] channel)
+               (assoc-in [:meta :channel] (first (clojure.string/split input #" ")))
+               (assoc-in [:input] (second (clojure.string/split input #" " 2)))
+               ))
+    ;; Split the words up
+    (let [words (clojure.string/split input #" ")]
+      ;; For all the messages, by default they go to the named channel
+      (map (partial merge {:channel channel :message "ERROR: No message"})
+           ;; Convert to a list of maps, if not already in that form
+           (conv-to-out?
+             (case (first words)
+               "start" (:message (swap! games start-game metaData (second words)))
+               "end" (:message (swap! games end-game metaData))
+               "help" (get-help metaData (rest words))
+               (:message (swap! games send-command metaData words))
+               )
+             )
+           )
+      )
     )
   )
 
