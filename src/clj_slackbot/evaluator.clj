@@ -100,10 +100,11 @@
   {:channel (:user metaData)
    :message (if (= (count words) 0)
               "Possible commands:
-              `!start gameType` Starts a game of gameType
-              `!end` ends the current game"
+              `,bot-start gameType` Starts a game of gameType
+              `,bot-end` ends the current game
+              `,bot-repo` displays a link to the source repo"
               (case (first words)
-                "list" "GameTypes: testGame" ;;TODO Add ways to automatically get all games
+                "list" "GameTypes: testGame, werewolf" ;;TODO Add ways to automatically get all games
                 (str "Unknown argument: "
                      (first words)
                      ". Possible arguments: list")
@@ -114,11 +115,27 @@
 
 (defn repo-link
   [metaData]
-  {
-    :channel (:channel metaData)
-    :message "https://github.com/lsenjov/clj-slackbot"
-  }
+  {:channel (:channel metaData)
+   :message "https://github.com/lsenjov/clj-slackbot" }
   )
+
+(defn- translate-single
+  "If the command is in angular brackets, translate to actual name from ids"
+  [^String i]
+  (log/info "translating single id:" i)
+  (if (and (= \< (first i))
+           (= \> (last i)))
+    (case (second i)
+      \@ (names/convert-user-id (apply str (-> i rest rest butlast)))
+      \# (names/convert-channel-id (apply str (-> i rest rest butlast)))
+      i)
+    i))
+
+(defn- translate-commands
+  "Splits commands by spaces, and changes usernames to actual names"
+  [in]
+  (let [words (clojure.string/split in #" ")]
+    (map translate-single words)))
 
 (defn- eval-expr-inner
   "Actually do something with the string. Does nothing right now"
@@ -134,16 +151,17 @@
                (assoc-in [:input] (second (clojure.string/split input #" " 2)))
                ))
     ;; Split the words up
-    (let [words (clojure.string/split input #" ")]
+    (let [words (translate-commands input)]
       ;; For all the messages, by default they go to the named channel
       (map (partial merge {:channel channel :message "ERROR: No message"})
            ;; Convert to a list of maps, if not already in that form
            (conv-to-out?
              (case (first words)
-               "start" (:message (swap! games start-game metaData (second words)))
-               "end" (:message (swap! games end-game metaData))
+               "bot-start" (:message (swap! games start-game metaData (second words)))
+               "bot-end" (:message (swap! games end-game metaData))
+               "bot-help" (get-help metaData (rest words))
                "help" (get-help metaData (rest words))
-               "repo" (repo-link metaData)
+               "bot-repo" (repo-link metaData)
                (:message (swap! games send-command metaData words))
                )
              )

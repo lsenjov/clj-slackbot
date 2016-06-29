@@ -7,21 +7,25 @@
 (def ^:private all-roles
   "A map of roles, their actions, and descriptions"
   {:villager {:desc "You are a villager"
-              :side :town}
+              :side :town
+              :action {:day {:vote nil}}
+              }
    :wolf {:desc "You are a werewolf"
           :side :wolves
           :action {:night {:kill nil}
-                   :first-night {:inform true}}
+                   :first-night {:inform true}
+                   :day {:vote nil}}
           }
    :seer {:desc "You are the seer."
           :side :town
           :action {:night {:see nil}
-                   :first-night {:see nil}}
+                   :first-night {:see nil}
+                   :day {:vote nil}}
           }
    }
   )
 
-(defn start
+(defn bot-start
   "Returns an empty game map"
   []
   {:players {}
@@ -40,6 +44,8 @@
       (assoc-in [:players user] {:alive true})
       (assoc :message (str user " has joined the game."))
       ))))
+
+(def hiub join)
 
 (defn leave
   "Leave if already in the game"
@@ -132,7 +138,6 @@
        (repeat gameMap)
        (keys actions)
        (map (comp first first) (vals actions))))
-       
 
 (defn- trigger-roles-first-night
   "Sends role messages out, triggers seer"
@@ -166,3 +171,53 @@
       )
     ;; Wrong phase
     (assoc :message "Incorrect game state to start game")))
+
+(defn check-complete?
+  "Checks all tasks are complete. Return list of players being waited upon or false"
+  [{actions :actions :as gameMap}]
+  (map first
+       (filter (fn [[k vMap]]
+                 ;; If any of the items are actually true, return the mapping
+                 (some identity
+                       (map nil? (vals vMap))
+                       )
+                 )
+               actions)
+       )
+  )
+
+(defn- see-action
+  "The user is actually the seer, and is allowed to do the action, let's do it"
+  [{players :players :as gameMap} commands {user :user channel :channel :as metaData}]
+  (if-let [target (:role (players (first commands)))]
+    (-> gameMap
+        (assoc-in [:actions user :see] (first commands))
+        (assoc :message {:channel user
+                         :message (str "Player "
+                                       (first commands)
+                                       " is on the side of the "
+                                       (case (-> all-roles (target) :side)
+                                         :town "villagers."
+                                         :wolves "werewolves."))}))
+    (assoc gameMap :message {:channel user :message "Invalid target."})))
+
+
+(defn see
+  "Used by the seer"
+  [{players :players :as gameMap} commands {user :user channel :channel :as metaData}]
+  (log/info "see commands: " (apply str (interpose " " commands)))
+  ;; This filter finds all alive seers (one or none), and gets the name of the possible result
+  (let [seer (first (first (filter (fn [[k {alive :alive role :role}]]
+                              (and alive
+                                   (= role :seer)))
+                            players)))]
+    (if (and (= seer user)
+             ;; If the seer has already looked at someone, can't do it again
+             (-> gameMap :actions (get user) :see not))
+      ;; TODO do stuff
+      (see-action gameMap commands metaData)
+      (assoc gameMap :message {:channel user
+                               :message "You can't take that action right now"})
+      )
+    )
+  )

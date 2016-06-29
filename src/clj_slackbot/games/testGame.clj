@@ -4,7 +4,7 @@
   (:gen-class)
   )
 
-(defn start
+(defn bot-start
   "Returns an empty game map"
   []
   {:players {}
