@@ -1,6 +1,7 @@
 (ns clj-slackbot.games.testGame
   (:require [taoensso.timbre :as log]
             )
+  (:gen-class)
   )
 
 (defn start
@@ -21,5 +22,9 @@
     (log/info "commands are:" commands)
     (log/info "metaData are:" metaData)
     (if gameMap
-      (assoc gameMap :message (str "Test message. Random number:" (rand-int 1000)))
+      (assoc gameMap :message (str "Test message. Random number:"
+                                   (rand-int 1000)
+                                   ". Thanks for playing: "
+                                   (:user metaData)
+                                   "!"))
       (assoc (start) :message "ERROR: Map was missing"))))

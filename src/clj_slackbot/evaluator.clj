@@ -56,8 +56,8 @@
      (try
        (log/info "send-commands. ns is:" (get-in gameMap [channel :nameSpace]))
        (let [gameFn (ns-resolve (get-in gameMap [channel :nameSpace])
-                                   (symbol (first commands)))]
-       (log/info "fn is:" gameFn)
+                                (symbol (first commands)))]
+         (log/info "fn is:" gameFn)
          ;; Changes the actual bit of data
          (let [newMap (update-in gameMap [channel :data] gameFn (rest commands) metaData)]
            (log/info "send-commands: Has updated correctly, now moving message up")
@@ -68,7 +68,11 @@
          (do
            (log/info "send-commands: Couldn't resolve namespace, threw exception")
            (assoc gameMap :message (str "No command available:" (first commands)))))
-     ))))
+       )
+     {:message "No current game"}
+     )
+   )
+  )
 
 (defn conv-metadata
   "Converts metadata in a message to #channel and @sender, instead of ids"
@@ -83,15 +87,17 @@
   (log/info "eval-expr is:" s)
   (log/info "eval-expr. channel is:" channel " user is:" user)
   (let [words (clojure.string/split input #" ")]
-    {:status true
-     :channel channel
-     :user user
-     :message (case (first words)
-                "start" (:message (swap! games start-game channel (second words)))
-                "end" (:message (swap! games end-game channel))
-                (:message (swap! games send-command channel words metaData))
-                )
-     }
+    (list
+      {:channel channel
+       :message (case (first words)
+                  "start" (:message (swap! games start-game channel (second words)))
+                  "end" (:message (swap! games end-game channel))
+                  (:message (swap! games send-command channel words metaData))
+                  )
+       }
+      {:channel "@logansenjov"
+       :message "Testing"}
+      )
     )
   )
 

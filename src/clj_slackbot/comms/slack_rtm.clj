@@ -52,7 +52,7 @@
   (log/info "Converting message:" msg)
   (let [out {:id (next-id)
              :type "message"
-             :channel (names/convert-back (get-in msg [:channel]))
+             :channel (names/convert-channel-back (get-in msg [:channel]))
              :text (-> msg
                        :message
                        ;util/format-result-for-slack
