@@ -23,7 +23,7 @@
 
 (defn start-game
   "Checks if a game is in the channel. If not, start the game"
-  [gameMap channel gameType]
+  [gameMap {channel :channel :as metaData} gameType]
   (if (get gameMap channel)
     (assoc gameMap ;Game exists
            :message (str "Game already begun in this channel, gametype:"
@@ -40,7 +40,7 @@
 
 (defn end-game
   "Ends any game in progress in the channel"
-  ([gameMap channel]
+  ([gameMap {channel :channel :as metaData}]
    (if (get gameMap channel)
      (-> gameMap
          (dissoc channel)
@@ -50,7 +50,7 @@
 
 (defn send-command
   "Sends a command to a channel, if available"
-  ([gameMap channel commands metaData]
+  ([gameMap {channel :channel :as metaData} commands]
    (log/info "send-commands. commands:" commands)
    (if (get gameMap channel)
      (try
@@ -81,23 +81,31 @@
       (update-in [:meta :channel] names/convert-channel-id)
       (update-in [:meta :user] names/convert-user-id)))
 
+(defn conv-to-out?
+  "If not already in a list, wraps in a list. If a string, sets is as the message"
+  [i]
+  (log/info "conv-to-list?:" i)
+  (if (string? i)
+    (recur {:message i})
+    (if (sequential? i)
+      i
+      (list i))))
+
 (defn- eval-expr-inner
   "Actually do something with the string. Does nothing right now"
   [{input :input {channel :channel user :user :as metaData} :meta :as s}]
   (log/info "eval-expr is:" s)
   (log/info "eval-expr. channel is:" channel " user is:" user)
   (let [words (clojure.string/split input #" ")]
-    (list
-      {:channel channel
-       :message (case (first words)
-                  "start" (:message (swap! games start-game channel (second words)))
-                  "end" (:message (swap! games end-game channel))
-                  (:message (swap! games send-command channel words metaData))
-                  )
-       }
-      {:channel "@logansenjov"
-       :message "Testing"}
-      )
+    (map (partial merge {:channel channel :message "ERROR: No message"})
+         (conv-to-out?
+           (case (first words)
+                       "start" (:message (swap! games start-game metaData (second words)))
+                       "end" (:message (swap! games end-game metaData))
+                       (:message (swap! games send-command metaData words))
+                       )
+                     )
+         )
     )
   )
 
