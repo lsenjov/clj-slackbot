@@ -10,12 +10,13 @@
               :side :town}
    :wolf {:desc "You are a werewolf"
           :side :wolves
-          :action {:night [:kill]}
+          :action {:night {:kill nil}
+                   :first-night {:inform true}}
           }
    :seer {:desc "You are the seer."
           :side :town
-          :action {:night [:see]
-                   :first-night [:see]}
+          :action {:night {:see nil}
+                   :first-night {:see nil}}
           }
    }
   )
@@ -89,11 +90,60 @@
   {:channel pName
    :message (get-in all-roles [(:role pMap) :desc])})
 
+(defn- trigger-single-action-description
+  "Creates a message for a single action"
+  [gameMap player action]
+  {:channel player
+   :message (case action
+              :kill "Vote now to kill someone. Type `,#channel kill @player`"
+              :see "You can see the role of someone. Type `,#channel see @player`"
+              :inform (str "All wolves: "
+                           (apply str
+                                  (interpose ", "
+                                             (keys (filter #(= (:role (val %)) :wolf) (:players gameMap)))
+                                             )
+                                  )
+                           )
+              "ERROR: Should not be showing up. Let lsenjov know"
+              )
+   }
+  )
+
+(defn- filter-actions
+  "Creates a list of players with current actions"
+  [{status :status players :players :as gameMap}]
+  (apply merge {}
+         (filter some?
+                 (map (fn [[k v]] (let [actions (get-in all-roles [(:role v) :action status])]
+                               (if (and actions (:alive v))
+                                 {k actions}
+                                 nil)))
+                      players))))
+
+(defn- create-actions
+  "Associates the new actions for the phase, and appends messages"
+  [gameMap]
+  (assoc gameMap :actions (filter-actions gameMap)))
+
+(defn- trigger-roles
+  "Returns a list of messages for roles"
+  [{actions :actions :as gameMap}]
+  (map trigger-single-action-description
+       (repeat gameMap)
+       (keys actions)
+       (map (comp first first) (vals actions))))
+       
+
 (defn- trigger-roles-first-night
   "Sends role messages out, triggers seer"
   [gameMap]
   ;; TODO Seer ability
-  (assoc gameMap :message (map single-role-description (:players gameMap))))
+  (assoc gameMap :message
+         (concat (map single-role-description (:players gameMap))
+                 (trigger-roles gameMap)
+                 )
+         )
+  )
 
 (defn- begin-game
   "Assigns roles, sets the time to first-night"
@@ -101,6 +151,7 @@
   (-> gameMap
       (assoc :status :first-night)
       (update-in [:players] assign-roles)
+      (create-actions)
       (trigger-roles-first-night)))
 
 (defn begin
