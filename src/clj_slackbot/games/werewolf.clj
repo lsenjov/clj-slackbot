@@ -47,6 +47,32 @@
   (and (is-alive? gameMap user)
        (has-action? gameMap user action)))
 
+(defn- get-count-by-role
+  "Returns a map of all alive players by role"
+  [{players :players :as gameMap}]
+  (log/trace "get-count-by-role. players:" players)
+  (->> players
+       (filter (fn [[_ {alive :alive}]] alive))
+       (apply merge {})
+       (group-by (fn [[_ {r :role}]] r))
+       (map (fn [kv] {(key kv) (count (val kv))}))
+       (apply merge {})
+       )
+  )
+
+(defn- get-count-by-side
+  "Returns a map of all alive players by role"
+  [{players :players :as gameMap}]
+  (log/trace "get-count-by-role. players:" players)
+  (->> players
+       (filter (fn [[_ {alive :alive}]] alive))
+       (apply merge {})
+       (group-by (fn [[_ {r :role}]] (get-in all-roles [r :side])))
+       (map (fn [kv] {(key kv) (count (val kv))}))
+       (apply merge {})
+       )
+  )
+
 (defn- set-role-action
   "Sets a user's action if they have it. Does not send any messages about it."
   [{actions :actions :as gameMap} user action value]
@@ -333,7 +359,43 @@
                  (assoc-in [:players n :alive] false)
                  (concat-message (str n " was lynched.")))
              (concat-message gameMap "No majority was reached, no-one was lynched.")))
+    :first-night gameMap ;; We already sent the seer their message
+    :night (let [[n c] (max-votes actions :kill)]
+             ;; Highest person gets deaded
+             (-> gameMap
+                 (assoc-in [:players n :alive] false)
+                 (concat-message (str n " was killed during the night."))))
     (concat-message gameMap "ERROR: Don't know what to do here in take-actions.")))
+
+(defn- check-win-conditions
+  "Checks to see if any side has won. If none, announce the next day."
+  [{players :players :as gameMap}]
+  (log/trace "check-win-conditions. gameMap:" gameMap)
+  (let [{wolves :wolves town :town :as counts} (get-count-by-side gameMap)]
+    (if (= 0 wolves)
+      (-> gameMap
+          (assoc :status :end)
+          (concat-message "All the wolves are dead! The villagers win!")
+          ;; TODO Add end-game stats
+          )
+      (if (>= wolves town)
+        (-> gameMap
+            (assoc :status :end)
+            (concat-message "The wolves outnumber the townsfolk! The wolves win!")
+            ;; TODO Add end-game stats
+            )
+        ;; No-one has won, it is a new day
+        (concat-message gameMap
+                        (case status
+                          :first-night "It is now the first night."
+                          :night "It is now night time."
+                          :day "It is now daytime."
+                          :end "The game has ended."
+                          "ERROR: This shouldn't be showing here."))
+        )
+      )
+    )
+  )
 
 (defn- check-and-trigger-change
   "Checks for all actions complete. If true, change from night to day or day to night, re-do actions"
@@ -353,22 +415,15 @@
         (-> gameMap
             (take-actions)
             (assoc-in [:status] newStatus)
+            (check-win-conditions)
             (create-actions)
-            (concat-message (str "It is now "
-                                 (case newStatus
-                                   :day "day"
-                                   :night "night"
-                                   :first-night "night"
-                                   :waiting "before the game has started"
-                                   "something other than day and night")
-                                 ".")
-                            )
             )
         )
       )
     )
   )
 
+;; SEE
 (defn- see-action
   "The user is actually the seer, and is allowed to do the action, let's do it"
   [{players :players :as gameMap} commands {user :user channel :channel :as metaData}]
@@ -435,8 +490,6 @@
       )
     (assoc-message gameMap "You cannot vote right now"))
   )
-
-  
 (defn vote
   "Vote for someone during the daytime. Call `vote clear` to remove your vote"
   [{players :players :as gameMap} commands {user :user channel :channel :as metaData}]
@@ -444,6 +497,27 @@
   (-> gameMap
       (vote-inner commands metaData)
       (check-and-trigger-change commands metaData)))
+
+;; KILL
+(defn- kill-inner
+  "Makes sure it's a valid target"
+  [{players :players :as gameMap} [target] {user :user channel :channel :as metaData}]
+  (log/trace "kill-inner. target:" target "user:" user)
+  (if (has-action? gameMap user :kill)
+    (if (is-alive? gameMap target)
+      (-> gameMap
+          (set-role-action user :kill target)
+          (assoc-message (str "You have voted to kill " target) user))
+      (assoc-message gameMap "Invalid target." user))
+    (assoc-message gameMap "You can't do that right now." user)))
+(defn kill
+  "Werewolves vote for someone during the nighttime."
+  [gameMap [target :as commands] {user :user channel :channel :as metaData}]
+  (log/trace "kill. user:" user "target:" target)
+  (-> gameMap
+      (kill-inner commands metaData)
+      (check-and-trigger-change commands metaData)))
+
 
 (defn debug
   "Sends the current gamemap to logs. Does nothing in-game"
