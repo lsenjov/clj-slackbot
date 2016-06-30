@@ -29,7 +29,7 @@
                                  ". Thanks for playing: "
                                  (:user metaData)
                                  "!"))
-    (assoc (start) :message "ERROR: Map was missing")))
+    (assoc (bot-start) :message "ERROR: Map was missing")))
 
 (defn testMultipleMessages
   "Sends a message to the channel for each of the additional arguments"

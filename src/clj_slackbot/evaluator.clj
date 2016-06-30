@@ -27,13 +27,14 @@
 (defn start-game
   "Checks if a game is in the channel. If not, start the game"
   [gameMap {channel :channel :as metaData} gameType]
+  (log/info "Attempting to start game:" gameType)
   (if (get gameMap channel)
     (assoc gameMap ;Game exists
            :message (str "Game already begun in this channel, gametype:"
                          (get-in gameMap [channel :gameType])))
     (try
       (let [gameNs (symbol (str "clj-slackbot.games." gameType))]
-        (if-let [gameFn (ns-resolve gameNs 'start)]
+        (if-let [gameFn (ns-resolve gameNs 'bot-start)]
           (-> gameMap
               (assoc channel
                      (create-new-game gameType gameNs (gameFn)))
@@ -44,6 +45,7 @@
 (defn end-game
   "Ends any game in progress in the channel"
   ([gameMap {channel :channel :as metaData}]
+   (log/info "Ending game in channel:" channel)
    (if (get gameMap channel)
      (-> gameMap
          (dissoc channel)
@@ -54,13 +56,14 @@
 (defn send-command
   "Sends a command to a channel, if available"
   ([gameMap {channel :channel :as metaData} commands]
-   (log/info "send-commands. commands:" commands)
+   (log/info "send-command. commands:" commands)
+   (log/trace "send-command. gameMap:" gameMap)
    (if (get gameMap channel)
      (try
-       (log/info "send-commands. ns is:" (get-in gameMap [channel :nameSpace]))
+       (log/trace "send-commands. ns is:" (get-in gameMap [channel :nameSpace]))
        (let [gameFn (ns-resolve (get-in gameMap [channel :nameSpace])
                                 (symbol (first commands)))]
-         (log/info "fn is:" gameFn)
+         (log/trace "fn is:" gameFn)
          ;; Changes the actual bit of data
          (let [newMap (update-in gameMap [channel :data] gameFn (rest commands) metaData)]
            (log/info "send-commands: Has updated correctly, now moving message up")
@@ -69,10 +72,11 @@
          )
        (catch Exception e
          (do
-           (log/info "send-commands: Couldn't resolve namespace, threw exception")
+           (log/debug "send-commands: Couldn't resolve namespace, caught exception:" e)
+           (log/trace (clojure.stacktrace/print-stack-trace e))
            (assoc gameMap :message (str "No command available:" (first commands)))))
        )
-     {:message "No current game"}
+     (assoc gameMap :message {:message "No current game"})
      )
    )
   )
@@ -87,7 +91,7 @@
 (defn conv-to-out?
   "If not already in a list, wraps in a list. If a string, sets is as the message"
   [i]
-  (log/info "conv-to-list?:" i)
+  (log/trace "conv-to-list?:" i)
   (if (string? i)
     (recur {:message i})
     (if (sequential? i)
@@ -97,6 +101,7 @@
 (defn get-help
   "Gets general help, or help for a certain game"
   [metaData words]
+  (log/trace "get-help. words:" words)
   {:channel (:user metaData)
    :message (if (= (count words) 0)
               "Possible commands:
@@ -122,7 +127,7 @@
 (defn- translate-single
   "If the command is in angular brackets, translate to actual name from ids"
   [^String i]
-  (log/info "translating single id:" i)
+  (log/trace "translating single id:" i)
   (if (and (= \< (first i))
            (= \> (last i)))
     (case (second i)
@@ -134,6 +139,7 @@
 (defn- translate-commands
   "Splits commands by spaces, and changes usernames to actual names"
   [in]
+  (log/trace "translate-commands:" in)
   (let [words (clojure.string/split in #" ")]
     (map translate-single words)))
 
@@ -141,7 +147,7 @@
   "Actually do something with the string. Does nothing right now"
   [{input :input {channel :channel user :user :as metaData} :meta :as s}]
   (log/info "eval-expr is:" s)
-  (log/info "eval-expr. channel is:" channel " user is:" user)
+  (log/trace "eval-expr. channel is:" channel " user is:" user)
   (if (= (first input) \#)
     ;; If the first argument is a channel, substitute the channel
     (recur (-> s
@@ -162,6 +168,7 @@
                "bot-help" (get-help metaData (rest words))
                "help" (get-help metaData (rest words))
                "bot-repo" (repo-link metaData)
+               "bot-reset" (do (names/init) {:message "Reset channels and user id-name pairs."})
                (:message (swap! games send-command metaData words))
                )
              )
