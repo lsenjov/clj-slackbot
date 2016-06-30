@@ -326,6 +326,7 @@
   [{status :status actions :actions :as gameMap}]
   (case status
     :day (let [[n c] (max-votes actions :vote)]
+           ;; If majority is reached
            (if (> c
                   (quot (count (get-all-action-values actions :vote)) 2))
              (-> gameMap
@@ -350,12 +351,15 @@
                         :day :night
                         status)]
         (-> gameMap
+            (take-actions)
             (assoc-in [:status] newStatus)
             (create-actions)
             (concat-message (str "It is now "
                                  (case newStatus
                                    :day "day"
                                    :night "night"
+                                   :first-night "night"
+                                   :waiting "before the game has started"
                                    "something other than day and night")
                                  ".")
                             )
