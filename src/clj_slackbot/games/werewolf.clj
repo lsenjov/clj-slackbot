@@ -107,22 +107,38 @@
 (defn- assoc-message
   "Associates a message with the gameMap"
   ([gameMap message]
-   (log/trace "assoc-message.")
+   (log/trace "assoc-message. message:" message)
    (assoc gameMap :message (create-message message)))
   ([gameMap message channel]
-   (log/trace "assoc-message.")
+   (log/trace "assoc-message. message:" message "channel:" channel)
    (assoc gameMap :message (create-message message channel)))
   )
 
 (defn- concat-message
   "Adds messages to already existing messages"
   ([gameMap message]
-   (log/trace "concat-message.")
+   (log/trace "concat-message. message:" message)
    (update-in gameMap [:message] concat (create-message message)))
   ([gameMap message channel]
-   (log/trace "concat-message.")
+   (log/trace "concat-message. message:" message "channel:" channel)
    (update-in gameMap [:message] concat (create-message message channel)))
   )
+
+(defn- count-votes
+  "Returns a map of vote targets to number of votes"
+  [actions kw]
+  (-> (get-all-action-values actions kw)
+      vals
+      frequencies))
+(defn- display-votes
+  "Converts the current daytime vote display to a pretty message"
+  [{actions :actions :as gameMap}]
+  (concat-message gameMap
+                  (apply str
+                         "Current vote totals: "
+                         (-> (count-votes actions :vote)
+                             ((partial map (fn [[k v]] (str (if k k "Noone") ": " v ". "))))
+                             ((partial interpose " "))))))
 
 ;; CREATE GAME
 (defn bot-start
@@ -168,12 +184,17 @@
   "Show status of the current game"
   [gameMap commands {user :user channel :channel :as metaData}]
   (log/trace "status.")
-  (assoc-message gameMap
-         (case (:status gameMap)
-           :waiting (str "Waiting for players. Current players: "
-                         (apply str
-                                (interpose ", " (keys (gameMap :players)))))
-           "ERROR: Unknown Status")))
+  (case (:status gameMap)
+    :waiting (assoc-message gameMap
+                            (str "Waiting for players. Current players: "
+                                 (apply str
+                                        (interpose ", " (keys (gameMap :players))))))
+    ;; Have to dissoc, as display-votes concats to previous messages
+    :day (display-votes (dissoc gameMap :message))
+    :night (assoc-message gameMap "Not yet implemented.")
+    :first-night (assoc-message gameMap "Waiting on seer.")
+    :end (assoc-message gameMap "Games is over.")
+    (assoc-message gameMap "ERROR: Unknown Status")))
 
 (defn- create-roles
   "Create a list of (unshuffled) roles to be used in the game"
@@ -321,13 +342,6 @@
     )
   )
 
-(defn- count-votes
-  "Returns a map of vote targets to number of votes"
-  [actions kw]
-  (-> (get-all-action-values actions kw)
-      vals
-      frequencies))
-
 (defn- max-votes
   "Counts a list of actions, returns a [name count] pair, which had the highest count.
   Must specify a keyword, so can use for both town/wolves"
@@ -335,16 +349,6 @@
   (-> (count-votes actions kw)
       ((partial sort-by val))
       last))
-
-(defn- display-votes
-  "Converts the current daytime vote display to a pretty message"
-  [{actions :actions :as gameMap}]
-  (concat-message gameMap
-                  (apply str
-                         "Current vote totals: "
-                         (-> (count-votes actions :vote)
-                             ((partial map (fn [[k v]] (str (if k k "Noone") ": " v ". "))))
-                             ((partial interpose " "))))))
 
 (defn- take-actions
   "Checks and resolves available actions.
@@ -365,33 +369,39 @@
              (-> gameMap
                  (assoc-in [:players n :alive] false)
                  (concat-message (str n " was killed during the night."))))
-    (concat-message gameMap "ERROR: Don't know what to do here in take-actions.")))
+    ;; Nothing should be done here, just return the map
+    gameMap))
 
 (defn- check-win-conditions
   "Checks to see if any side has won. If none, announce the next day."
   [{players :players :as gameMap}]
   (log/trace "check-win-conditions. gameMap:" gameMap)
   (let [{wolves :wolves town :town :as counts} (get-count-by-side gameMap)]
-    (if (= 0 wolves)
-      (-> gameMap
-          (assoc :status :end)
-          (concat-message "All the wolves are dead! The villagers win!")
-          ;; TODO Add end-game stats
-          )
-      (if (>= wolves town)
+    (let [wc (if wolves wolves 0)
+          tc (if town town 0)]
+      (log/trace "check-win-conditions. wc:" wc "tc:" tc)
+      (if (= 0 wc)
         (-> gameMap
             (assoc :status :end)
-            (concat-message "The wolves outnumber the townsfolk! The wolves win!")
+            (concat-message "All the wolves are dead! The villagers win!")
             ;; TODO Add end-game stats
             )
-        ;; No-one has won, it is a new day
-        (concat-message gameMap
-                        (case status
-                          :first-night "It is now the first night."
-                          :night "It is now night time."
-                          :day "It is now daytime."
-                          :end "The game has ended."
-                          "ERROR: This shouldn't be showing here."))
+        (if (>= wc tc)
+          (-> gameMap
+              (assoc :status :end)
+              (concat-message "The wolves outnumber the townsfolk! The wolves win!")
+              ;; TODO Add end-game stats
+              )
+          ;; No-one has won, it is a new day
+          (-> gameMap
+              (concat-message (case status
+                                :first-night "It is now the first night."
+                                :night "It is now night time."
+                                :day "It is now daytime."
+                                :end "The game has ended."
+                                "ERROR: This shouldn't be showing here."))
+              (trigger-roles-other-times))
+          )
         )
       )
     )
