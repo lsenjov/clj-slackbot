@@ -64,6 +64,7 @@
 (defn- convert-generic
   "Converts user or channel ids into actual names, checking against the relevant parts"
   [nameAtom backNameAtom firstChar func selectKW ^String id]
+  (log/trace "convert-generic. firstChar:" firstChar "id:" id)
   (if (= (first id) firstChar)
     ; First character matches, it's a name, return it
     id
@@ -116,6 +117,7 @@
 (defn convert-channel-back
   "Converts a user name or channel name back to a channel id, or returns the name if could not be found"
   [^String n]
+  (log/trace "Converting channel back:" n)
   (if-let [id (get @backChannelList n)]
     ;; We found the channel, return the id
     (do
@@ -134,6 +136,7 @@
           (log/info "Couldn't convert back name:" n)
           n)
         )
+      n
       )
     )
   )

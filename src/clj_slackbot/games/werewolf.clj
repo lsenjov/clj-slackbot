@@ -164,7 +164,7 @@
             )))
     (assoc-message gameMap "The game has already started.")))
 
-(def hiub join)
+(def hiub "Has the player join the game" join)
 
 (defn leave
   "Leave if already in the game"
@@ -243,6 +243,7 @@
                                              )
                                   )
                            )
+              :vote "You can vote to lynch someone. Type `,#channel vote @player` here, or `,vote @player` in the channel"
               "ERROR: Should not be showing up. Let lsenjov know"
               )
    }
@@ -264,7 +265,10 @@
   "Associates the new actions for the phase, and appends messages"
   [gameMap]
   (log/trace "Creating actions for " (:status gameMap))
-  (assoc gameMap :actions (filter-actions gameMap)))
+  (-> gameMap
+      (assoc :actions (filter-actions gameMap))
+      )
+  )
 
 (defn- trigger-roles
   "Returns a list of messages for roles"
@@ -290,11 +294,12 @@
   [{status :status :as gameMap}]
   (log/trace "trigger-roles-other-times.")
   (-> gameMap
-      (concat-message gameMap (trigger-roles gameMap))
-      (concat-message gameMap (case status
-                                :day "It is daybreak."
-                                :night "It is nighttime. Please don't talk during the night."
-                                "ERROR: Unknown game status to be calling this."))
+      (concat-message (trigger-roles gameMap))
+      (concat-message (case status
+                        :day "It is daybreak. Please `vote` on who is to be lynched today."
+                        :night "It is nighttime. Please don't talk during the night."
+                        :end "The game has ended."
+                        "ERROR: Unknown game status to be calling this."))
       )
   )
 
@@ -374,7 +379,7 @@
 
 (defn- check-win-conditions
   "Checks to see if any side has won. If none, announce the next day."
-  [{players :players :as gameMap}]
+  [{status :status players :players :as gameMap}]
   (log/trace "check-win-conditions. gameMap:" gameMap)
   (let [{wolves :wolves town :town :as counts} (get-count-by-side gameMap)]
     (let [wc (if wolves wolves 0)
@@ -400,12 +405,7 @@
                                 :day "It is now daytime."
                                 :end "The game has ended."
                                 "ERROR: This shouldn't be showing here."))
-              (trigger-roles-other-times))
-          )
-        )
-      )
-    )
-  )
+              ))))))
 
 (defn- check-and-trigger-change
   "Checks for all actions complete. If true, change from night to day or day to night, re-do actions"
@@ -427,6 +427,7 @@
             (assoc-in [:status] newStatus)
             (check-win-conditions)
             (create-actions)
+            (trigger-roles-other-times)
             )
         )
       )

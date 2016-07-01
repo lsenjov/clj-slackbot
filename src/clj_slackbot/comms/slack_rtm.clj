@@ -48,15 +48,12 @@
 
 (defn- convert-to-out
   "Converts a message before sending to out"
-  [msg]
+  [{message :message channel :channel :as msg}]
   (log/info "Converting message:" msg)
   (let [out {:id (next-id)
              :type "message"
-             :channel (names/convert-channel-back (get-in msg [:channel]))
-             :text (-> msg
-                       :message
-                       ;util/format-result-for-slack
-                       )
+             :channel (names/convert-channel-back channel)
+             :text message
              }]
     (log/info "Converted to:" out)
     out))

@@ -3,6 +3,7 @@
             [clojail.testers :refer [secure-tester-without-def blanket]]
             [taoensso.timbre :as log]
             [clj-slackbot.names :as names]
+            [clojure.repl]
 
             ;; Add games below here
             [clj-slackbot.games.testGame :as testGame]
@@ -61,20 +62,30 @@
    (if (get gameMap channel)
      (try
        (log/trace "send-commands. ns is:" (get-in gameMap [channel :nameSpace]))
-       (let [gameFn (ns-resolve (get-in gameMap [channel :nameSpace])
+       (if-let [gameFn (ns-resolve (get-in gameMap [channel :nameSpace])
                                 (symbol (first commands)))]
-         (log/trace "fn is:" gameFn)
-         ;; Changes the actual bit of data
-         (let [newMap (update-in gameMap [channel :data] gameFn (rest commands) metaData)]
-           (log/info "send-commands: Has updated correctly, now moving message up")
-           ;; Moves the data up from the data structure to the top level for retrieval
-           (assoc newMap :message (get-in newMap [channel :data :message])))
+         ;; If the function exists, go ahead
+         (do 
+           (log/trace "fn is:" gameFn)
+           ;; Changes the actual bit of data
+           (let [newMap (-> gameMap
+                            ;; Clear the message queue in the game first
+                            (assoc-in [channel :data :message] nil)
+                            ;; Now perform the action
+                            (update-in [channel :data] gameFn (rest commands) metaData))]
+             ;; If we reach this point, the game hasn't thrown an uncaught exception
+             ;; Moves the data up from the data structure to the top level for retrieval
+             (log/info "send-commands: Has updated correctly, now moving message up")
+             (assoc newMap :message (get-in newMap [channel :data :message])))
+           )
+         ;; Couldn't resolve function in namespace
+         (assoc gameMap :message {:message (str "No command:" (first commands))})
          )
        (catch Exception e
          (do
            (log/debug "send-commands: Couldn't resolve namespace, caught exception:" e)
            (log/trace (clojure.stacktrace/print-stack-trace e))
-           (assoc gameMap :message (str "No command available:" (first commands)))))
+           (assoc gameMap :message (str "Command threw exception:" (first commands)))))
        )
      (assoc gameMap :message {:message "No current game"})
      )
@@ -98,6 +109,39 @@
       i
       (list i))))
 
+(defn possible-game-namespaces
+  "Returns a list of strings of the last item of the game namespaces"
+  []
+  (log/trace "possible-game-namespaces.")
+  (->> (all-ns)
+       (map str)
+       (filter (fn [s] (= "games" (second (clojure.string/split s #"\.")))))
+       (map (fn [x] (last (clojure.string/split x #"\."))))
+       ))
+
+(defn get-help-in-namespace
+  "Returns a map of all function names and descriptions"
+  [nmspace]
+  (log/trace "get-help-in-namespace:" nmspace)
+  (try (->> nmspace
+            ns-publics
+            (map (fn [[k v]] [k (:doc (meta v))]))
+            (sort-by first)
+            (map (fn [[k v]] (str k
+                                  ": "
+                                  v
+                                  "\n")))
+            (apply str)
+            )
+       (catch Exception e (str "No gameType: "
+                               (last (clojure.string/split
+                                       (str nmspace)
+                                       (re-pattern "\\.")))
+                               ".\n"
+                               "Possible gameTypes: "
+                               (apply str (interpose " " (possible-game-namespaces)))
+                               ))))
+
 (defn get-help
   "Gets general help, or help for a certain game"
   [metaData words]
@@ -105,15 +149,13 @@
   {:channel (:user metaData)
    :message (if (= (count words) 0)
               "Possible commands:
-              `,bot-start gameType` Starts a game of gameType
-              `,bot-end` ends the current game
-              `,bot-repo` displays a link to the source repo"
-              (case (first words)
-                "list" "GameTypes: testGame, werewolf" ;;TODO Add ways to automatically get all games
-                (str "Unknown argument: "
-                     (first words)
-                     ". Possible arguments: list")
-                )
+              `help`, `bot-help` This help message. Takes optional gameType.
+              `bot-games` Lists possible game types
+              `bot-start gameType` Starts a game of gameType
+              `bot-restart gameType` Ends whatever game is in progress, and starts a game of gameType
+              `bot-end` ends the current game
+              `bot-repo` displays a link to the source repo"
+              (get-help-in-namespace (symbol (str "clj-slackbot.games." (first words))))
               )
    }
   )
@@ -165,10 +207,17 @@
              (case (first words)
                "bot-start" (:message (swap! games start-game metaData (second words)))
                "bot-end" (:message (swap! games end-game metaData))
+               "bot-restart" (do (swap! games end-game metaData)
+                                 (swap! games start-game metaData (second words)))
                "bot-help" (get-help metaData (rest words))
                "help" (get-help metaData (rest words))
+               "bot-games" (str "Possible gameTypes: "
+                                (apply str (interpose " " (possible-game-namespaces))))
                "bot-repo" (repo-link metaData)
-               "bot-reset" (do (names/init) {:message "Reset channels and user id-name pairs."})
+               "bot-init" (do (names/init) {:message "Reset channels and user id-name pairs."})
+               "bot-sudo" (eval-expr-inner (-> s
+                                               (assoc-in [:input] (apply str (interpose " " (rest (rest words)))))
+                                               (assoc-in [:meta :user] (first (rest words)))))
                (:message (swap! games send-command metaData words))
                )
              )
