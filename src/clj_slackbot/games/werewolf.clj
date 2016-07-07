@@ -22,7 +22,21 @@
                    :first-night {:see nil}
                    :day {:vote nil}}
           }
+   :tanner {:desc "You are the tanner. You win alone if you are killed."
+            :side :town
+            :action {:day {:vote nil}}
+            }
+   :beholder {:desc "You are the beholder."
+              :side :town
+              :action {:first-night {:behold true}
+                       :day {:vote nil}}
+              }
    }
+  )
+
+(def ^:private extra-roles
+  "A list of extra roles possible for 6+ players"
+  '(:tanner :beholder)
   )
 
 ;; HELPERS
@@ -46,6 +60,17 @@
   (log/trace "is-alive-has-action?. user:" user "role:" action "actions:" actions)
   (and (is-alive? gameMap user)
        (has-action? gameMap user action)))
+
+(defn- get-count-by-role-all
+  "Returns a map of all players by role, dead or alive"
+  [{players :players :as gameMap}]
+  (log/trace "get-count-by-role-all. players:" players)
+  (->> players
+       (group-by (fn [[_ {r :role}]] r))
+       (map (fn [kv] {(key kv) (count (val kv))}))
+       (apply merge {})
+       )
+  )
 
 (defn- get-count-by-role
   "Returns a map of all alive players by role"
@@ -196,16 +221,28 @@
     :end (assoc-message gameMap "Games is over.")
     (assoc-message gameMap "ERROR: Unknown Status")))
 
+(defn- fill-extra-roles
+  "Returns a list of randomly selected roles from the extra roles, a random number of roles between 0 and the number of empty spots"
+  [l ^Integer n]
+  (log/trace "get-extra-roles:" l n)
+  (concat l (take (rand-int (- n (count l))) (shuffle extra-roles))))
+
+(defn- fill-villagers
+  "Fills the remaining roles of l with :villager"
+  [l ^Integer n]
+  (log/trace "fill-villagers:" l n)
+  (concat l (repeat (- n (count l))
+                    :villager)))
+
 (defn- create-roles
   "Create a list of (unshuffled) roles to be used in the game"
-  [n]
+  [^Integer n]
   (log/trace "create-roles:" n)
   ;; Has a seer and one wolf, every 6 players adds another wolf
-  (let [part (concat '(:seer) (repeat (inc (quot n 6)) :wolf))]
-    ;; Fill the rest with villagers
-    (concat part
-            (repeat (- n (count part))
-                    :villager))))
+  (-> '(:seer)
+      (concat (repeat (inc (quot n 6)) :wolf))
+      (fill-extra-roles n)
+      (fill-villagers n)))
 
 (defn- assign-single-role
   "Assigns a single role to a player"
@@ -243,6 +280,7 @@
                                              )
                                   )
                            )
+              :behold (str "The seer is: " (first (keys (filter #(= (:role (val %)) :seer) (:players gameMap)))))
               :vote "You can vote to lynch someone. Type `,#channel vote @player` here, or `,vote @player` in the channel"
               "ERROR: Should not be showing up. Let lsenjov know"
               )
@@ -377,6 +415,15 @@
     ;; Nothing should be done here, just return the map
     gameMap))
 
+(def tgm {:actions {"@c" {:inform true}
+                    "@lsenjov" {:see "@b"}}
+          :players {"@lsenjov" {:role :seer :alive true}
+                    "@a" {:role :villager :alive true}
+                    "@b" {:role :tanner :alive true}
+                    "@c" {:role :wolf :alive true}}
+         :status :day
+         :message '({:channel "@lsenjov" :message "Player @b is on the side of the villagers."})})
+
 (defn- check-win-conditions
   "Checks to see if any side has won. If none, announce the next day."
   [{status :status players :players :as gameMap}]
@@ -397,15 +444,22 @@
               (concat-message "The wolves outnumber the townsfolk! The wolves win!")
               ;; TODO Add end-game stats
               )
-          ;; No-one has won, it is a new day
-          (-> gameMap
-              (concat-message (case status
-                                :first-night "It is now the first night."
-                                :night "It is now night time."
-                                :day "It is now daytime."
-                                :end "The game has ended."
-                                "ERROR: This shouldn't be showing here."))
-              ))))))
+          (if (= (:tanner (get-count-by-role gameMap)) (:tanner (get-count-by-role-all gameMap)))
+            ;; No-one has won, it is a new day
+            (-> gameMap
+                (concat-message (case status
+                                  :first-night "It is now the first night."
+                                  :night "It is now night time."
+                                  :day "It is now daytime."
+                                  :end "The game has ended."
+                                  "ERROR: This shouldn't be showing here."))
+                )
+            (-> gameMap
+                (assoc :status :end)
+                (concat-message "The tanner has died! The tanner wins!")
+                ;; TODO add end-game stats
+                )
+            ))))))
 
 (defn- check-and-trigger-change
   "Checks for all actions complete. If true, change from night to day or day to night, re-do actions"
