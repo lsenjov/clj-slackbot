@@ -8,36 +8,69 @@
   "A map of roles, their actions, and descriptions"
   {:villager {:desc "You are a villager"
               :side :town
+              :appears-as :town
               :action {:day {:vote nil}}
               }
    :wolf {:desc "You are a werewolf"
           :side :wolves
+          :appears-as :wolves
           :action {:night {:kill nil}
                    :first-night {:inform true}
                    :day {:vote nil}}
           }
    :seer {:desc "You are the seer."
           :side :town
+          :appears-as :town
           :action {:night {:see nil}
                    :first-night {:see nil}
                    :day {:vote nil}}
           }
    :tanner {:desc "You are the tanner. You win alone if you are killed."
             :side :town
+            :appears-as :town
             :action {:day {:vote nil}}
             }
    :beholder {:desc "You are the beholder."
               :side :town
+              :appears-as :town
               :action {:first-night {:behold true}
                        :day {:vote nil}}
               }
+   :pacifist {:desc "You are the pacifist, and refuse to vote to lynch a town member."
+              :side :town
+              :appears-as :town
+              }
+   :lycan {:desc "You are the lycan. You are on the side of the villagers, but appear as a wolf to the seer."
+           :side :town
+           :appears-as :wolves
+           :action {:day {:vote nil}}
+           }
+   :sorcerer {:desc "You are a sorcerer. You are a seer, but are on the side of the werewolves."
+              :side :wolves
+              :appears-as :wolves
+              :action {:night {:see nil}
+                       :first-night {:see nil}
+                       :day {:vote nil}}}
+   :sympathiser {:desc "You are a wolf sympathiser. You are a normal human, but win with the werewolves, and show to the seer as a human."
+                 :side :wolves
+                 :appears-as :town
+                 :action {:day {:vote nil}}
+                 }
    }
   )
 
 (def ^:private extra-roles
-  "A list of extra roles possible for 6+ players"
-  '(:tanner :beholder)
+  "A list of extra roles possible"
+  '(:tanner :beholder :pacifist :lycan :sorcerer :sympathiser)
   )
+
+(def ^:private town-roles
+  "A list of all extra roles on the town's side"
+  (filter (fn [r] (= :town (-> all-roles r :side))) extra-roles))
+
+(def ^:private wolf-roles
+  "A list of all extra roles on the wolves' side"
+  (filter (fn [r] (= :wolves (-> all-roles r :side))) extra-roles))
 
 ;; HELPERS
 (defn- is-alive?
@@ -53,6 +86,14 @@
   (if (some #{action} (keys (get actions user)))
     true
     nil))
+
+(defn- get-action
+  "Gets the current value of a player's action. May return nil if the action hasn't been taken yet. Assumes has been checked first with has-action"
+  [{actions :actions :as gameMap} user action]
+  (log/trace "get-action. user:" user "action:" action "gameMap:" gameMap)
+  (-> actions
+      (get user)
+      (get action)))
 
 (defn- is-alive-has-action?
   "Checks a gamemap to see if the user is alive and has the role. Returns true or nil"
@@ -222,10 +263,14 @@
     (assoc-message gameMap "ERROR: Unknown Status")))
 
 (defn- fill-extra-roles
-  "Returns a list of randomly selected roles from the extra roles, a random number of roles between 0 and the number of empty spots"
+  "Returns a list of randomly selected roles from the extra roles, a random number of roles between 0 and the number of empty spots.
+  Starts with 1 town role, then a repeating sequence of 1 wolf role and 2 town roles"
   [l ^Integer n]
   (log/trace "get-extra-roles:" l n)
-  (concat l (take (rand-int (- n (count l))) (shuffle extra-roles))))
+  (let [tr (shuffle town-roles)
+        tra (apply concat (partition-all 1 2 tr))
+        trb (apply concat (partition-all 1 2 (rest tr)))]
+  (concat l (take (- n (count l)) (interleave tra wolf-roles trb)))))
 
 (defn- fill-villagers
   "Fills the remaining roles of l with :villager"
@@ -514,14 +559,14 @@
                                           (= role :seer)))
                                    players)))]
     (log/trace "The seer (if they are alive) is:" seer)
-    (if (and (= seer user)
-             ;; If the seer has already looked at someone, can't do it again
-             (-> gameMap :actions (get user) :see not))
+    ;; If user has the action, and has not taken it yet
+    (if (and (is-alive-has-action? gameMap user :see)
+             (not (get-action gameMap user :see)))
       ;; TODO do stuff
       (see-action gameMap commands metaData)
       (assoc-message gameMap
-                      "You can't take that action right now"
-                      user)
+                     "You can't take that action right now"
+                     user)
       )
     )
   )
