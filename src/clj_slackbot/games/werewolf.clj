@@ -64,7 +64,7 @@
   )
 
 (def ^:private extra-roles
-  "A list of extra roles possible"
+  "A list of extra roles possible."
   '(:tanner :beholder :pacifist :lycan :sorcerer :sympathiser)
   )
 
@@ -249,6 +249,7 @@
    :message "Game created"}
   )
 
+;; JOINING GAMES
 (defn join
   "Has the player join the game"
   [{status :status :as gameMap} commands {user :user channel :channel :as metaData}]
@@ -265,6 +266,7 @@
 
 (def hiub "Has the player join the game" join)
 
+;; A PLAYER LEAVING A GAME
 (defn leave
   "Leave if already in the game"
   [{status :status :as gameMap} commands {user :user channel :channel :as metaData}]
@@ -279,6 +281,7 @@
       (assoc-message (str user " was not playing anyway.")))
     (assoc-message gameMap "The game has already started.")))
 
+;; GAME STATUS
 (defn- remove-not-nils
   "Removes items from a map where the value is truthy"
   [m]
@@ -319,6 +322,7 @@
     :end (assoc-message gameMap "Games is over.")
     (assoc-message gameMap "ERROR: Unknown Status")))
 
+;; Creating a list of roles
 (defn- fill-extra-roles
   "Returns a list of randomly selected roles from the extra roles, a random number of roles between 0 and the number of empty spots.
   Is a repeating sequence of two town roles, then one wolf role.
@@ -331,14 +335,12 @@
           trb (apply concat (partition-all 1 2 (rest tr)))]
       (concat l (take (- n (count l)) (interleave tra trb wolf-roles))))
     l))
-
 (defn- fill-villagers
   "Fills the remaining roles of l with :villager"
   [l ^Integer n]
   (log/trace "fill-villagers:" l n)
   (concat l (repeat (- n (count l))
                     :villager)))
-
 (defn- create-roles
   "Create a list of (unshuffled) roles to be used in the game"
   [^Integer n]
@@ -349,13 +351,13 @@
       (fill-extra-roles n)
       (fill-villagers n)))
 
+;; Assigning roles to players
 (defn- assign-single-role
   "Assigns a single role to a player"
   [role [pName pMap]]
   (log/trace "assign-single-role. role:" role "pName:" pName)
   {pName (assoc pMap :role role)}
   )
-
 (defn- assign-roles
   "Assigns roles to a map of players"
   [playerMap]
@@ -363,13 +365,13 @@
   (let [roles (shuffle (create-roles (count playerMap)))]
     (apply merge (map assign-single-role roles playerMap))))
 
+;; Describing actions and roles
 (defn- single-role-description
   "Creates a private message for a single role description"
   [[pName pMap]]
   (log/trace "single-role-description.")
   {:channel pName
    :message (get-in all-roles [(:role pMap) :desc])})
-
 (defn- trigger-single-action-description
   "Creates a message for a single action, must be added to a list as a message"
   [gameMap player action]
@@ -391,7 +393,6 @@
               )
    }
   )
-
 (defn- filter-actions
   "Creates a list of players with current actions"
   [{status :status players :players :as gameMap}]
@@ -404,6 +405,7 @@
                                  nil)))
                       players))))
 
+;; Appending actions and sending out action messages
 (defn- create-actions
   "Associates the new actions for the phase, and appends messages"
   [gameMap]
@@ -412,7 +414,6 @@
       (assoc :actions (filter-actions gameMap))
       )
   )
-
 (defn- trigger-roles
   "Returns a list of messages for roles"
   [{actions :actions :as gameMap}]
@@ -421,7 +422,6 @@
        (repeat gameMap)
        (keys actions)
        (map (comp first first) (vals actions))))
-
 (defn- trigger-roles-first-night
   "Sends role messages out, triggers seer"
   [gameMap]
@@ -431,7 +431,6 @@
       (concat-message (trigger-roles gameMap))
       (concat-message "The first night begins. Please wait while the seer looks at someone.\nPlease don't talk during the nighttimes.")
       ))
-
 (defn- trigger-roles-other-times
   "Sends role messages out"
   [{status :status :as gameMap}]
@@ -446,6 +445,7 @@
       )
   )
 
+;; START GAME
 (defn- begin-game
   "Assigns roles, sets the time to first-night"
   [gameMap]
@@ -455,7 +455,6 @@
       (update-in [:players] assign-roles)
       (create-actions)
       (trigger-roles-first-night)))
-
 (defn start
   "Starts the game if there's enough players"
   [gameMap commands {user :user channel :channel :as metaData}]
@@ -471,6 +470,7 @@
     ;; Wrong phase
     (assoc gameMap :message "Incorrect game state to start game")))
 
+;; Checking victory conditions and triggering between phases
 (defn- check-incomplete?
   "Checks all tasks are complete. Return list of players being waited upon or nil if all done"
   [{actions :actions :as gameMap}]
@@ -489,7 +489,6 @@
       r)
     )
   )
-
 (defn- max-votes
   "Counts a list of actions, returns a [name count] pair, which had the highest count.
   Must specify a keyword, so can use for both town/wolves"
@@ -497,7 +496,6 @@
   (-> (count-votes actions kw)
       ((partial sort-by val))
       last))
-
 (defn- take-actions
   "Checks and resolves available actions.
   Assumes it is the correct time to change between day and night, before the change"
@@ -519,7 +517,6 @@
                  (concat-message (str n " was killed during the night."))))
     ;; Nothing should be done here, just return the map
     gameMap))
-
 (defn- show-summary
   "Shows a summary of the players in the game, along with their roles and their life status"
   [{players :players :as gameMap}]
@@ -530,7 +527,6 @@
                                               (if a ":white_check_mark:" ":finnadie:"))))
        (interpose \newline)
        (apply str)))
-
 (defn- check-win-conditions
   "Checks to see if any side has won. If none, announce the next day."
   [{status :status players :players :as gameMap}]
@@ -567,7 +563,6 @@
                 (concat-message (show-summary gameMap))
                 )
             ))))))
-
 (defn- check-and-trigger-change
   "Checks for all actions complete. If true, change from night to day or day to night, re-do actions"
   [{status :status :as gameMap} commands {user :user channel :channel :as metaData}]
@@ -690,12 +685,25 @@
       (kill-inner commands metaData)
       (check-and-trigger-change commands metaData)))
 
-
+;; Admin
 (defn debug
   "Sends the current gamemap to logs. Does nothing in-game"
   [{players :players :as gameMap} commands {user :user channel :channel :as metaData}]
   (log/info "debug. gameMap:" (pr-str gameMap))
   (log/info "commands:" commands)
   (log/info "metaData:" metaData)
-  (assoc-message gameMap "Done")
+  (assoc-message gameMap "Sent current gamemap to logs")
   )
+
+;; Describing roles
+(def ^:private role-descriptions
+  "Simple pre-compiled string for easy broadcast"
+  (str "All possible roles (only villager, wolf, and seer appears at less that 6 players):\n"
+       (apply str (interpose \newline
+                             (map (fn [[k {d :desc}]] (str (name k) ": " d))
+                                  all-roles)))))
+(defn describe-roles
+  "Sends the list of roles to the requesting player."
+  [gameMap commands {user :user channel :channel :as metaData}]
+  (log/info "describe-roles.")
+  (assoc-message gameMap role-descriptions user))
