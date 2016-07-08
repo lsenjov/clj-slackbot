@@ -12,8 +12,12 @@
               :action {:day {:vote nil}}
               }
    :wolf {:desc "You are a werewolf"
+          ;; Which side they win with
           :side :wolves
+          ;; For :see actions
           :appears-as :wolves
+          ;; Only roles with this are counted with regards to wolves outnumbering humans
+          :count-win :wolves
           :action {:night {:kill nil}
                    :first-night {:inform true}
                    :day {:vote nil}}
@@ -126,6 +130,19 @@
        )
   )
 
+(defn- get-count-by-side-win-condition
+  "Returns a map of all alive players by role"
+  [{players :players :as gameMap}]
+  (log/trace "get-count-by-role. players:" players)
+  (->> players
+       (filter (fn [[_ {alive :alive}]] alive))
+       (apply merge {})
+       (group-by (fn [[_ {r :role}]] (get-in all-roles [r :count-win])))
+       (map (fn [kv] {(key kv) (count (val kv))}))
+       (apply merge {})
+       )
+  )
+
 (defn- get-count-by-side
   "Returns a map of all alive players by role"
   [{players :players :as gameMap}]
@@ -155,7 +172,7 @@
   (apply merge {}
          (map 
            (fn [[n m]] {n (get m action)})
-           (filter (fn [[_ v]] (get v action)) actionMap) ;; Returns list of k-v vectors
+           (filter (fn [[_ v]] (some #{action} (keys v))) actionMap) ;; Returns list of k-v vectors
            )))
 
 (defn- create-message
@@ -191,20 +208,36 @@
   )
 
 (defn- count-votes
-  "Returns a map of vote targets to number of votes"
+  "Returns a map of vote targets to the number of players that voted for it"
   [actions kw]
+  (log/trace "count-votes:" actions kw)
   (-> (get-all-action-values actions kw)
       vals
-      frequencies))
+      frequencies
+      ))
+(defn- show-votes
+  "Returns a map of vote targets to a list of the players that voted for them"
+  [actions kw]
+  (log/trace "count-votes:" actions kw)
+  (->> (get-all-action-values actions kw)
+      (group-by (fn [[_ v]] v))
+      (map (fn [[k v]] {k (map (fn [[nk _]] nk) v)}))
+      (apply merge {})
+      ))
 (defn- display-votes
   "Converts the current daytime vote display to a pretty message"
   [{actions :actions :as gameMap}]
+  (log/trace "display-votes. actions:" actions)
   (concat-message gameMap
                   (apply str
                          "Current vote totals: "
-                         (-> (count-votes actions :vote)
-                             ((partial map (fn [[k v]] (str (if k k "Noone") ": " v ". "))))
-                             ((partial interpose " "))))))
+                         (->> (show-votes actions :vote)
+                             (map (fn [[k v]] (str "Voting for: "
+                                                   (if k k "Noone")
+                                                   ": "
+                                                   (apply str (interpose ", " v))
+                                                   ".")))
+                             (interpose \newline)))))
 
 ;; CREATE GAME
 (defn bot-start
@@ -246,6 +279,30 @@
       (assoc-message (str user " was not playing anyway.")))
     (assoc-message gameMap "The game has already started.")))
 
+(defn- remove-not-nils
+  "Removes items from a map where the value is truthy"
+  [m]
+  (apply merge {}
+         (remove (fn [[k v]] v) m)))
+(defn- list-unfilled-actions
+  [{actions :actions :as gameMap}]
+  (log/trace "list-unfilled-actions. actions:" actions)
+  (->> actions
+       (map (fn [[k v]] [k (remove-not-nils v)]))
+       (remove (fn [[_ v]] (= 0 (count v))))
+       (map (fn [[k v]] (keys v)))
+       (apply concat)
+       frequencies
+       ))
+(defn- formatted-unfilled-actions
+  [{actions :actions :as gameMap}]
+  (let [ufa (list-unfilled-actions gameMap)]
+    (log/trace "formatted-unfilled-actions. ufa:" ufa)
+    (str "Waiting on players to take actions:\n"
+         (apply str
+                (interpose \newline
+                           (map (fn [[k v]] (str v " player(s) to " (name k)))
+                                ufa))))))
 (defn status
   "Show status of the current game"
   [gameMap commands {user :user channel :channel :as metaData}]
@@ -257,20 +314,23 @@
                                         (interpose ", " (keys (gameMap :players))))))
     ;; Have to dissoc, as display-votes concats to previous messages
     :day (display-votes (dissoc gameMap :message))
-    :night (assoc-message gameMap "Not yet implemented.")
-    :first-night (assoc-message gameMap "Waiting on seer.")
+    :night (assoc-message gameMap (formatted-unfilled-actions gameMap))
+    :first-night (assoc-message gameMap (formatted-unfilled-actions gameMap))
     :end (assoc-message gameMap "Games is over.")
     (assoc-message gameMap "ERROR: Unknown Status")))
 
 (defn- fill-extra-roles
   "Returns a list of randomly selected roles from the extra roles, a random number of roles between 0 and the number of empty spots.
-  Starts with 1 town role, then a repeating sequence of 1 wolf role and 2 town roles"
+  Is a repeating sequence of two town roles, then one wolf role.
+  Only adds extra roles if n >= 6, otherwise leaves it"
   [l ^Integer n]
   (log/trace "get-extra-roles:" l n)
-  (let [tr (shuffle town-roles)
-        tra (apply concat (partition-all 1 2 tr))
-        trb (apply concat (partition-all 1 2 (rest tr)))]
-  (concat l (take (- n (count l)) (interleave tra wolf-roles trb)))))
+  (if (>= n 6)
+    (let [tr (shuffle town-roles)
+          tra (apply concat (partition-all 1 2 tr))
+          trb (apply concat (partition-all 1 2 (rest tr)))]
+      (concat l (take (- n (count l)) (interleave tra trb wolf-roles))))
+    l))
 
 (defn- fill-villagers
   "Fills the remaining roles of l with :villager"
@@ -460,20 +520,22 @@
     ;; Nothing should be done here, just return the map
     gameMap))
 
-(def tgm {:actions {"@c" {:inform true}
-                    "@lsenjov" {:see "@b"}}
-          :players {"@lsenjov" {:role :seer :alive true}
-                    "@a" {:role :villager :alive true}
-                    "@b" {:role :tanner :alive true}
-                    "@c" {:role :wolf :alive true}}
-         :status :day
-         :message '({:channel "@lsenjov" :message "Player @b is on the side of the villagers."})})
+(defn- show-summary
+  "Shows a summary of the players in the game, along with their roles and their life status"
+  [{players :players :as gameMap}]
+  (->> players
+       (map (fn [[n {r :role a :alive}]] (str n
+                                              " -- "
+                                              (name r)
+                                              (if a ":white_check_mark:" ":finnadie:"))))
+       (interpose \newline)
+       (apply str)))
 
 (defn- check-win-conditions
   "Checks to see if any side has won. If none, announce the next day."
   [{status :status players :players :as gameMap}]
-  (log/trace "check-win-conditions. gameMap:" gameMap)
-  (let [{wolves :wolves town :town :as counts} (get-count-by-side gameMap)]
+  (log/trace "check-win-conditions. gameMap:" (pr-str gameMap))
+  (let [{wolves :wolves town nil :as counts} (get-count-by-side-win-condition gameMap)]
     (let [wc (if wolves wolves 0)
           tc (if town town 0)]
       (log/trace "check-win-conditions. wc:" wc "tc:" tc)
@@ -481,13 +543,13 @@
         (-> gameMap
             (assoc :status :end)
             (concat-message "All the wolves are dead! The villagers win!")
-            ;; TODO Add end-game stats
+            (concat-message (show-summary gameMap))
             )
         (if (>= wc tc)
           (-> gameMap
               (assoc :status :end)
               (concat-message "The wolves outnumber the townsfolk! The wolves win!")
-              ;; TODO Add end-game stats
+              (concat-message (show-summary gameMap))
               )
           (if (= (:tanner (get-count-by-role gameMap)) (:tanner (get-count-by-role-all gameMap)))
             ;; No-one has won, it is a new day
@@ -502,7 +564,7 @@
             (-> gameMap
                 (assoc :status :end)
                 (concat-message "The tanner has died! The tanner wins!")
-                ;; TODO add end-game stats
+                (concat-message (show-summary gameMap))
                 )
             ))))))
 
@@ -632,7 +694,7 @@
 (defn debug
   "Sends the current gamemap to logs. Does nothing in-game"
   [{players :players :as gameMap} commands {user :user channel :channel :as metaData}]
-  (log/info "debug. gameMap:" gameMap)
+  (log/info "debug. gameMap:" (pr-str gameMap))
   (log/info "commands:" commands)
   (log/info "metaData:" metaData)
   (assoc-message gameMap "Done")
