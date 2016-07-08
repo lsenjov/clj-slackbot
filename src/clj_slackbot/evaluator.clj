@@ -4,6 +4,7 @@
             [taoensso.timbre :as log]
             [clj-slackbot.names :as names]
             [clojure.repl]
+            [clj-slackbot.helpers :as helpers]
 
             ;; Add games below here
             [clj-slackbot.games.testGame :as testGame]
@@ -154,6 +155,7 @@
               `bot-start gameType` Starts a game of gameType
               `bot-restart gameType` Ends whatever game is in progress, and starts a game of gameType
               `bot-end` ends the current game
+              `bot-scores` see the current player score rankings relative to other players (1000 is starting value)
               `bot-repo` displays a link to the source repo"
               (get-help-in-namespace (symbol (str "clj-slackbot.games." (first words))))
               )
@@ -184,6 +186,28 @@
   (log/trace "translate-commands:" in)
   (let [words (clojure.string/split in #" ")]
     (map translate-single words)))
+
+(defn- display-scores
+  "Displays the current scores, sends to user"
+  []
+    (->> (dissoc (helpers/get-scores) :total)
+         seq
+         (sort-by (comp :score second) >)
+         ;; Place, name, score, time
+         (map (fn [p [n {s :score t :time}]]
+                (str p ": "
+                     n " -- "
+                     s " -- "
+                     (let [c (java.util.Calendar/getInstance)]
+                       (.setTimeInMillis c t)
+                       (.toString (.getTime c))
+                       )))
+              ;; Will display the top 20 ranks, if they exist
+              (range 1 21))
+         (interpose \newline)
+         (apply str "Top 20 current high scores:" \newline)
+         ))
+
 
 (defn- eval-expr-inner
   "Actually do something with the string. Does nothing right now"
@@ -218,6 +242,7 @@
                "bot-sudo" (eval-expr-inner (-> s
                                                (assoc-in [:input] (apply str (interpose " " (rest (rest words)))))
                                                (assoc-in [:meta :user] (first (rest words)))))
+               "bot-scores" {:message (display-scores) :channel user}
                (:message (swap! games send-command metaData words))
                )
              )

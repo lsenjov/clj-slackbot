@@ -1,5 +1,6 @@
 (ns clj-slackbot.games.werewolf
   (:require [taoensso.timbre :as log]
+            [clj-slackbot.helpers :as helpers]
             )
   (:gen-class)
   )
@@ -524,6 +525,37 @@
                                               (if a ":white_check_mark:" ":finnadie:"))))
        (interpose \newline)
        (apply str)))
+(defn- get-player-list
+  "Gets the list of players from a gameMap"
+  [{players :players :as gameMap}]
+  (log/trace "get-player-list.")
+  (keys players))
+(defn- get-player-list-by-side
+  [{players :players :as gameMap} side]
+  (log/trace "get-player-list-by-side:" side)
+  (->> players
+       (filter (fn [[_ {r :role}]] (= side (-> all-roles r :side))))
+       (map (fn [[k _]] k))))
+(defn- score-by-side
+  "Scores all players on one side, returns the original map anyway"
+  [{players :players :as gameMap} side]
+  (log/trace "score-by-side:" side)
+  (helpers/score-game (get-player-list-by-side gameMap side)
+                      (get-player-list gameMap))
+  gameMap)
+(defn- get-player-list-by-role
+  [{players :players :as gameMap} role]
+  (log/trace "get-player-list-by-role:" role)
+  (->> players
+       (filter (fn [[_ {r :role}]] (= role r)))
+       (map (fn [[k _]] k))))
+(defn- score-by-role
+  "Scores all players of one role, returns the original map"
+  [{players :players :as gameMap} role]
+  (log/trace "score-by-role:" role)
+  (helpers/score-game (get-player-list-by-role gameMap role)
+                      (get-player-list gameMap))
+  gameMap)
 (defn- check-win-conditions
   "Checks to see if any side has won. If none, announce the next day."
   [{status :status players :players :as gameMap}]
@@ -537,12 +569,14 @@
             (assoc :status :end)
             (concat-message "All the wolves are dead! The villagers win!")
             (concat-message (show-summary gameMap))
+            (score-by-side :town)
             )
         (if (>= wc tc)
           (-> gameMap
               (assoc :status :end)
               (concat-message "The wolves outnumber the townsfolk! The wolves win!")
               (concat-message (show-summary gameMap))
+              (score-by-side :wolves)
               )
           (if (= (:tanner (get-count-by-role gameMap)) (:tanner (get-count-by-role-all gameMap)))
             ;; No-one has won, it is a new day
@@ -558,6 +592,7 @@
                 (assoc :status :end)
                 (concat-message "The tanner has died! The tanner wins!")
                 (concat-message (show-summary gameMap))
+                (score-by-role :tanner)
                 )
             ))))))
 (defn- check-and-trigger-change
