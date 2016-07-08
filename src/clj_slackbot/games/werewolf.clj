@@ -22,7 +22,7 @@
                    :first-night {:inform true}
                    :day {:vote nil}}
           }
-   :seer {:desc "You are the seer."
+   :seer {:desc "You are the seer. You can see one player's alignment each night."
           :side :town
           :appears-as :town
           :action {:night {:see nil}
@@ -34,7 +34,7 @@
             :appears-as :town
             :action {:day {:vote nil}}
             }
-   :beholder {:desc "You are the beholder."
+   :beholder {:desc "You are the beholder. You know who the seer is."
               :side :town
               :appears-as :town
               :action {:first-night {:behold true}
@@ -74,7 +74,8 @@
 
 (def ^:private wolf-roles
   "A list of all extra roles on the wolves' side"
-  (filter (fn [r] (= :wolves (-> all-roles r :side))) extra-roles))
+  (let [part (filter (fn [r] (= :wolves (-> all-roles r :side))) extra-roles)]
+    (concat part (repeat (count part) :wolf))))
 
 ;; HELPERS
 (defn- is-alive?
@@ -329,12 +330,9 @@
   Only adds extra roles if n >= 6, otherwise leaves it"
   [l ^Integer n]
   (log/trace "get-extra-roles:" l n)
-  (if (>= n 6)
-    (let [tr (shuffle town-roles)
-          tra (apply concat (partition-all 1 2 tr))
-          trb (apply concat (partition-all 1 2 (rest tr)))]
-      (concat l (take (- n (count l)) (interleave tra trb wolf-roles))))
-    l))
+  (concat l
+          (take (quot n 6) (shuffle wolf-roles))
+          (take (* 2 (quot n 6)) (shuffle town-roles))))
 (defn- fill-villagers
   "Fills the remaining roles of l with :villager"
   [l ^Integer n]
@@ -346,8 +344,7 @@
   [^Integer n]
   (log/trace "create-roles:" n)
   ;; Has a seer and one wolf, every 6 players adds another wolf
-  (-> '(:seer)
-      (concat (repeat (inc (quot n 6)) :wolf))
+  (-> '(:seer :wolf)
       (fill-extra-roles n)
       (fill-villagers n)))
 
