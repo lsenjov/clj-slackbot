@@ -156,12 +156,13 @@
         (assoc :status :playing)
         )
     ;; Not enough players
-    (assoc :message (str "Not enough players. Current players: " (count (:players gameMap))))
+    (assoc gameMap :message (str "Not enough players. Current players: " (count (:players gameMap))))
     ))
 
 (defn- score-game
   "Given a gameMap, a spy's name, and a boolean on whether the spy won, score the game"
   [gameMap spy spyWin?]
+  (log/trace "Scoring game. Spy" spy (if spyWin? "won." "lost."))
   (let [players (set (keys (:players gameMap)))]
     (helpers/score-game
       (if spyWin?
@@ -212,6 +213,114 @@
       (assoc gameMap :message {:message (str "Invalid guess.") :channel user}))
     ;; This player can't guess the location
     (assoc gameMap :message {:message (str "You are not allowed to guess the location") :channel user})
+    )
+  )
+
+(defn- get-spy
+  "Gets the name of the spy in a gamemap"
+  [{players :players :as gameMap}]
+  (log/trace "get-spy. Players:" players)
+  (key (first (filter (fn [[_ v]]
+                        (log/trace "agree inner function value is:" v)
+                        (= "Spy" (get v :role)))
+                      players
+                      )
+              )
+       )
+  )
+
+;; TODO restructure this mess to make it easier to track
+(defn agree
+  "Allows a player to agree a player should be picked as the spy."
+  [{{target :target} :accusing :as gameMap} commands {user :user channel :channel :as metaData}]
+  (log/trace "Agree. target:" target)
+  (if (get-in gameMap [:accusing :remaining user])
+    ;; This player can still agree
+    (let [outMap (update-in gameMap
+                            [:accusing :remaining]
+                            disj
+                            user)]
+      (log/trace "Agree. outMap:" outMap)
+      (if (= 0 (count (get-in outMap [:accusing :remaining])))
+        ;; Everyone has decided the target is the spy
+        (if (= "Spy" (get-in outMap [:players target :role]))
+          ;; They were right! End the game
+          (let [out (-> outMap
+                        (assoc :status :ended)
+                        (assoc :message "The spy was caught!")
+                        )]
+            (score-game out target false)
+            out)
+          ;; They were wrong, end game, spy wins
+          (let [spy (get-spy outMap)
+                out (-> outMap
+                        (assoc :status :ended)
+                        (assoc :message (str "The spy was actually " spy))
+                        )]
+            (log/trace "Found spy as:" spy)
+            (score-game out spy true)
+            out)
+          )
+        (assoc outMap :message (str user
+                                    " agreed that "
+                                    target
+                                    " is the spy."))
+        )
+      )
+    ;; This player is unable to agree
+    (assoc gameMap :message {:channel user
+                             :message "You are unable to agree"})
+    )
+  )
+
+
+(defn disagree
+  "Lets a player disagree with the current choice"
+  [gameMap commands {user :user channel :channel :as metaData}]
+  (if (get-in gameMap [:accusing :remaining user])
+    ;; This player has yet to agree or disagree and is valid
+    (-> gameMap
+        (assoc-in [:players
+                   (get-in gameMap [:accusing :accuser])
+                   :actions
+                   :accuse]
+                  false)
+        (dissoc :accusing)
+        (assoc :message (str user " disagreed."))
+        )
+    (assoc gameMap :message {:channel user
+                             :message "You are unable to disagree"})
+    )
+  )
+
+(defn accuse
+  "Lets a player attempt to accuse another player"
+  [gameMap [target & _] {user :user channel :channel :as metaData}]
+  (if (get-in gameMap [:players user :actions :accuse])
+    ;; This person can still accuse
+    (if (:accusing gameMap)
+      ;; An accusation is currently underway
+      (assoc gameMap :message "An accusation is currently underway already.")
+      ;; No accusation is taking place
+      (let [players (-> gameMap :players keys set)]
+        (if (players target)
+          ;; Target is in the available players, it's a valid accusation
+          (-> gameMap
+              (assoc :accusing
+                     {:target target
+                      :remaining (disj players user target)
+                      :accuser user})
+              (assoc :message (str user
+                                   " has accused "
+                                   target
+                                   " of being the spy. agree or disagree."))
+              )
+          (assoc gameMap :message "Invalid target to accuse")
+          )
+        )
+      )
+    ;; Unable to accuse, either not playing or already had their accusation
+    (assoc gameMap :message "You are unable to accuse anyone")
     )
   )
 
