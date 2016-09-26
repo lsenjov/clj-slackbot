@@ -13,9 +13,9 @@
     (f config)))
 
 (defn -main [& args]
-  (log/merge-config! {:level :trace})
+  (log/set-level! :trace)
   (log/info "Logging info enabled")
-  (log/info "Logging trace enabled")
+  (log/trace "Logging trace enabled")
   (let [config (config/read-config)
         inst-comm (fn []
                     (log/info "Building com:" (:comm config))

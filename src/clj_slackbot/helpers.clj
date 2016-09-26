@@ -5,6 +5,20 @@
   (:gen-class)
   )
 
+(defn p-trace
+  "Passthrough trace. Logs to trace everything after the first arg. Returns the first arg"
+  [& body]
+  (log/trace (rest body))
+  (first body)
+  )
+
+(defn t-trace
+  "Thread trace. Logs whatever the first item is to trace, and returns it"
+  [item & args]
+  (log/trace "t-trace:" item "rest:" args)
+  item)
+
+
 ;; Scores
 (def ^:private starting-score
   "The starting score for a player to have"

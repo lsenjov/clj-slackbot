@@ -1,5 +1,6 @@
 (ns clj-slackbot.games.spyfall
   (:require [taoensso.timbre :as log]
+            [clj-slackbot.helpers :as helpers]
             )
   (:gen-class)
   )
@@ -38,6 +39,7 @@
   "Returns an empty game map"
   []
   {:players {}
+   :status :waiting
    :message "Game created"}
   )
 
@@ -68,7 +70,7 @@
   [gameMap commands {user :user channel :channel :as metaData}]
   (assoc gameMap :message
          (case (:status gameMap)
-           "waiting" (str "Waiting for players. Current players:"
+           :waiting (str "Waiting for players. Current players:"
                           (apply str
                                  (interpose ", " (keys (gameMap :players)))))
            "ERROR: Unknown Status")))
@@ -119,6 +121,7 @@
   "Given a player and a location, creates a private message for
   each player. Checks for spy."
   [[playerName playerMap] location]
+  (log/trace "Creating start message for player" playerName)
   (if (= "Spy" (:role playerMap))
     {:channel playerName
      :message "You are the spy! You must attempt to uncover the location."}
@@ -142,14 +145,82 @@
          )
   )
 
-(defn begin
+(defn start
   "Starts the game if there's enough players"
   [gameMap commands {user :user channel :channel :as metaData}]
+  (log/trace "Attempting to start game")
   (if (>= (count (:players gameMap)) 3)
     (-> gameMap
         assign-roles
         send-start-messages
+        (assoc :status :playing)
         )
     ;; Not enough players
     (assoc :message (str "Not enough players. Current players: " (count (:players gameMap))))
     ))
+
+(defn- score-game
+  "Given a gameMap, a spy's name, and a boolean on whether the spy won, score the game"
+  [gameMap spy spyWin?]
+  (let [players (set (keys (:players gameMap)))]
+    (helpers/score-game
+      (if spyWin?
+        ;; Spy wins alone
+        [spy]
+        ;; Everyone else wins
+        (disj players spy))
+      players)))
+
+(defn guess
+  "Allows the spy to guess the correct location"
+  [gameMap commands {user :user channel :channel :as metaData}]
+  (log/trace "Player" user "is guessing" (first commands))
+  (if (get-in gameMap [:players user :actions :guess])
+    ;; This player can guess the location
+    (if ((set (map :name (vals gameData)))
+         (first commands))
+      ;; This is a valid guess, maybe not correct though
+      (if (= (get-in gameData [(:location gameMap) :name])
+             (first commands))
+        ;; Correct guess!
+        (let [out (-> gameMap
+                      (assoc :message (str "The spy "
+                                           user
+                                           " correctly guessed you were at the "
+                                           (first commands)))
+                      (assoc :status :ended)
+                      (helpers/t-trace "Correct guess")
+                      )]
+            (score-game out user true)
+            out
+            )
+        ;; Incorrect guess
+        (let [out (-> gameMap
+                      (assoc :message {:message (str "The spy "
+                                                     user
+                                                     " failed to guess you were at the "
+                                                     (get-in gameData [(:location gameMap) :name])
+                                                     " and instead thought you were at the "
+                                                     (first commands))})
+                      (assoc :status :ended)
+                      (helpers/t-trace "Incorrect guess"))]
+            (score-game out user false)
+            out
+            )
+        )
+      ;; Invalid guess
+      (assoc gameMap :message {:message (str "Invalid guess.") :channel user}))
+    ;; This player can't guess the location
+    (assoc gameMap :message {:message (str "You are not allowed to guess the location") :channel user})
+    )
+  )
+
+;; Admin
+(defn debug
+  "Sends the current gamemap to logs. Does nothing in-game"
+  [{players :players :as gameMap} commands {user :user channel :channel :as metaData}]
+  (log/info "debug. gameMap:" (pr-str gameMap))
+  (log/info "commands:" commands)
+  (log/info "metaData:" metaData)
+  (assoc gameMap :message "Sent current gamemap to logs")
+  )
