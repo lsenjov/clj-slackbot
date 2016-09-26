@@ -73,6 +73,14 @@
            :waiting (str "Waiting for players. Current players:"
                           (apply str
                                  (interpose ", " (keys (gameMap :players)))))
+           :playing (if (:accusing gameMap)
+                      (str "There is an accusation against "
+                           (get-in gameMap [:accusing :target])
+                           ".\n"
+                           "Still to vote:"
+                           (apply str (interpose ", " (get-in gameMap [:accusing :remaining]))))
+                      "Game is underway.")
+           :ended "The game has ended."
            "ERROR: Unknown Status")))
 
 (defn- give-roles
@@ -272,7 +280,6 @@
                              :message "You are unable to agree"})
     )
   )
-
 
 (defn disagree
   "Lets a player disagree with the current choice"
