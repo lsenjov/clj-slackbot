@@ -7,15 +7,14 @@
 
 (def gameData
   "List of locations and possible roles"
-  {:airplane
-   {:name "Airplane"
-    :roles ["First Class Passenger"
-            "Air Marshall"
-            "Mechanic"
-            "Economy Class Passenger"
-            "Stwardess"
-            "Co-Pilot"
-            "Captain"]}
+  {:airplane {:name "Airplane"
+              :roles ["First Class Passenger"
+                      "Air Marshall"
+                      "Mechanic"
+                      "Economy Class Passenger"
+                      "Stwardess"
+                      "Co-Pilot"
+                      "Captain"]}
    :bank {:name "Bank"
           :roles ["Armoured Car Driver"
                   "Manager"
@@ -32,8 +31,88 @@
                    "Beach Goer"
                    "Beach Photographer"
                    "Ice Cream Truck Driver"]}
-   }
-  )
+   :casino {:name "Casino"
+            :roles ["Bartender"
+                    "Head Security Guard"
+                    "Bouncer"
+                    "Manager"
+                    "Hustler"
+                    "Dealer"
+                    "Gambler"]}
+   :cathedral {:name "Cathedral"
+               :roles ["Priest"
+                       "Begger"
+                       "Sinner"
+                       "Parishioner"
+                       "Tourist"
+                       "Sponsor"
+                       "Choir Singer"]}
+   :circus {:name "Circus"
+            :roles ["Acrobat"
+                    "Animal Trainer"
+                    "Magician"
+                    "Visitor"
+                    "Fire Eater"
+                    "Clown"
+                    "Juggler"]}
+   :corp-party {:name "CorporateParty"
+                :roles ["Entertainer"
+                        "Manager"
+                        "Unwelcomed Guest"
+                        "Owner"
+                        "Secretary"
+                        "Accountant"
+                        "Delivery Boy"]}
+   :crusade {:name "Crusade"
+             :roles ["Servant"
+                     "Bishop"
+                     "Squire"
+                     "Archer"
+                     "Monk"
+                     "Imprisoned Arab"
+                     "Knight"]}
+   :spa {:name "Spa"
+         :roles ["Customer"
+                 "Stylist"
+                 "Masseuse"
+                 "Manicurist"
+                 "Makeup Artist"
+                 "Dermatologist"
+                 "Beautician"]}
+   :embassy {:name "Embassy"
+             :roles ["Security Guard"
+                     "Secretary"
+                     "Ambassador"
+                     "Government Official"
+                     "Tourist"
+                     "Refugee"
+                     "Diplomat"]}
+   :hospital {:name "Hospital"
+              :roles ["Nurse"
+                      "Doctor"
+                      "Anesthesiologist"
+                      "Intern"
+                      "Patient"
+                      "Therapist"
+                      "Surgeon"]}
+   :hotel {:name "Hotel"
+           :roles ["Doorman"
+                   "Security Guard"
+                   "Manager"
+                   "Housekeeper"
+                   "Customer"
+                   "Bartender"
+                   "Bellman"]}
+   :base {:name "MilitaryBase"
+          :roles ["Deserter"
+                  "Colonel"
+                  "Medic"
+                  "Soldier"
+                  "Sniper"
+                  "Officer"
+                  "Tank Engineer"]}
+}
+)
 
 (defn bot-start
   "Returns an empty game map"
@@ -132,7 +211,15 @@
   (log/trace "Creating start message for player" playerName)
   (if (= "Spy" (:role playerMap))
     {:channel playerName
-     :message "You are the spy! You must attempt to uncover the location."}
+     :message (str "You are the spy! You must attempt to uncover the location.\n"
+                   "Possible locations: "
+                   (apply str
+                          (interpose ", "
+                                     (map (fn [[_ {n :name}]] n) gameData)
+                                     )
+                          )
+                   )
+     }
     {:channel playerName
      :message (str "You are the "
                    (:role playerMap)
@@ -144,12 +231,20 @@
 
 (defn- send-start-messages
   "Creates messages for each of the players"
-  [gameMap]
+  [{players :players :as gameMap}]
   (assoc gameMap :message
-         (map create-start-message
-              (:players gameMap)
-              (repeat (:location gameMap))
-              )
+         (conj
+           ;; Individual player messsages
+           (map create-start-message
+                players
+                (repeat (:location gameMap))
+                )
+           {:message (str "Guess who the spy is!\n"
+                          "The first question is to be asked by:"
+                          (rand-nth (keys players))
+                          )
+            }
+           )
          )
   )
 
