@@ -7,113 +7,62 @@
 
 (def ^:private gameData
   "List of locations and possible roles"
-  {
-   :airplane {:name "Airplane"
-              :roles ["First Class Passenger"
-                      "Air Marshall"
-                      "Mechanic"
-                      "Economy Class Passenger"
-                      "Stwardess"
-                      "Co-Pilot"
-                      "Captain"]}
+  {:airplane {:name "Airplane"
+              :roles ["First Class Passenger" "Air Marshall" "Mechanic" "Economy Class Passenger" "Stwardess" "Co-Pilot" "Captain"]}
    :bank {:name "Bank"
-          :roles ["Armoured Car Driver"
-                  "Manager"
-                  "Consultant"
-                  "Customer"
-                  "Robber"
-                  "Security Guard"
-                  "Teller"]}
+          :roles ["Armoured Car Driver" "Manager" "Consultant" "Customer" "Robber" "Security Guard" "Teller"]}
    :beach {:name "Beach"
-           :roles ["Beach Waitress"
-                   "Kite Surfer"
-                   "Lifeguard"
-                   "Thief"
-                   "Beach Goer"
-                   "Beach Photographer"
-                   "Ice Cream Truck Driver"]}
+           :roles ["Beach Waitress" "Kite Surfer" "Lifeguard" "Thief" "Beach Goer" "Beach Photographer" "Ice Cream Truck Driver"]}
    :casino {:name "Casino"
-            :roles ["Bartender"
-                    "Head Security Guard"
-                    "Bouncer"
-                    "Manager"
-                    "Hustler"
-                    "Dealer"
-                    "Gambler"]}
+            :roles ["Bartender" "Head Security Guard" "Bouncer" "Manager" "Hustler" "Dealer" "Gambler"]}
    :cathedral {:name "Cathedral"
-               :roles ["Priest"
-                       "Begger"
-                       "Sinner"
-                       "Parishioner"
-                       "Tourist"
-                       "Sponsor"
-                       "Choir Singer"]}
+               :roles ["Priest" "Begger" "Sinner" "Parishioner" "Tourist" "Sponsor" "Choir Singer"]}
    :circus {:name "Circus"
-            :roles ["Acrobat"
-                    "Animal Trainer"
-                    "Magician"
-                    "Visitor"
-                    "Fire Eater"
-                    "Clown"
-                    "Juggler"]}
+            :roles ["Acrobat" "Animal Trainer" "Magician" "Visitor" "Fire Eater" "Clown" "Juggler"]}
    :corp-party {:name "CorporateParty"
-                :roles ["Entertainer"
-                        "Manager"
-                        "Unwelcomed Guest"
-                        "Owner"
-                        "Secretary"
-                        "Accountant"
-                        "Delivery Boy"]}
+                :roles ["Entertainer" "Manager" "Unwelcomed Guest" "Owner" "Secretary" "Accountant" "Delivery Boy"]}
    :crusade {:name "Crusade"
-             :roles ["Servant"
-                     "Bishop"
-                     "Squire"
-                     "Archer"
-                     "Monk"
-                     "Imprisoned Arab"
-                     "Knight"]}
+             :roles ["Servant" "Bishop" "Squire" "Archer" "Monk" "Imprisoned Arab" "Knight"]}
    :spa {:name "Spa"
-         :roles ["Customer"
-                 "Stylist"
-                 "Masseuse"
-                 "Manicurist"
-                 "Makeup Artist"
-                 "Dermatologist"
-                 "Beautician"]}
+         :roles ["Customer" "Stylist" "Masseuse" "Manicurist" "Makeup Artist" "Dermatologist" "Beautician"]}
    :embassy {:name "Embassy"
-             :roles ["Security Guard"
-                     "Secretary"
-                     "Ambassador"
-                     "Government Official"
-                     "Tourist"
-                     "Refugee"
-                     "Diplomat"]}
+             :roles ["Security Guard" "Secretary" "Ambassador" "Government Official" "Tourist" "Refugee" "Diplomat"]}
    :hospital {:name "Hospital"
-              :roles ["Nurse"
-                      "Doctor"
-                      "Anesthesiologist"
-                      "Intern"
-                      "Patient"
-                      "Therapist"
-                      "Surgeon"]}
+              :roles ["Nurse" "Doctor" "Anesthesiologist" "Intern" "Patient" "Therapist" "Surgeon"]}
    :hotel {:name "Hotel"
-           :roles ["Doorman"
-                   "Security Guard"
-                   "Manager"
-                   "Housekeeper"
-                   "Customer"
-                   "Bartender"
-                   "Bellman"]}
-   :base {:name "MilitaryBase"
-          :roles ["Deserter"
-                  "Colonel"
-                  "Medic"
-                  "Soldier"
-                  "Sniper"
-                  "Officer"
-                  "Tank Engineer"]}
-}
-)
+           :roles ["Doorman" "Security Guard" "Manager" "Housekeeper" "Customer" "Bartender" "Bellman"]}
+   :military-base {:name "MilitaryBase"
+                   :roles ["Deserter" "Colonel" "Medic" "Soldier" "Sniper" "Officer" "Tank Engineer"]}
+   :studio {:name "Movie Studio"
+            :roles ["Stuntman" "Sound Engineer" "Cameraman" "Director" "Costume Artist" "Actor" "Producer"]}
+   :cruise-ship {:name "CruiseShip"
+                 :roles ["Rich Passenger" "Cook" "Captain" "Bartender" "Musician" "Waiter" "Mechanic"]}
+   :passenger-train {:name "PassengerTrain"
+           :roles ["Mechanic" "Border Patrol" "Train Attendant" "Passenger" "Restaurant Chef" "Engineer" "Stoker"]}
+   :pirate-ship {:name "PirateShip"
+                 :roles ["Cook" "Sailor" "Slave" "Canoneer" "Bound Prisoner" "Cabin Boy" "Brave Captain"]}
+   :polar-station {:name "PolarStation"
+                   :roles ["Medic" "Geologist" "Expedition Leader" "Biologist" "Radioman" "Hydrologist" "Meteorologist"]}
+   :police-station {:name "PoliceStation"
+                    :roles ["Detective" "Lawyer" "Journalist" "Criminalist" "Archivist" "Patrol Officer" "Criminal"]}
+   :restaurant {:name "Restaurant"
+                :roles ["Musician" "Customer" "Bouncer" "Hostess" "Head Chef" "food Critic" "Waiter"]}
+   :school {:name "School"
+            :roles ["Gym Teacher" "Student" "Principal" "Security Guard" "Janitor" "Lunch Lady" "Maintenance Man"]}
+   :service-station {:name "ServiceStation"
+                     :roles ["Manager" "Tire Specialist" "Biker" "Car Owner" "Car Wash Operator" "Electrician" "Mechanic"]}
+   :space-station {:name "SpaceStation"
+                   :roles ["Engineer" "Alien" "Space Tourist" "Pilot" "Commander" "Scientist" "Doctor"]}
+   :submarine {:name "Submarine"
+               :roles ["Cook" "Commander" "Sonar Technician" "Electronics Technician" "Sailor" "Radioman" "Navigator"]}
+   :supermarket {:name "Supermarket"
+                 :roles ["Customer" "Cashier" "Butcher" "Janitor" "Security Guard" "Food Sample Demonstrator" "Shelf Stocker"]}
+   :broadway {:name "BroadwayTheater"
+              :roles ["Cashier" "Visitor" "Director" "Actor" "Coat Check Lady" "Prompter" "Crewman"]}
+   :university {:name "University"
+                :roles ["Graduate Student" "Professor" "Dead" "Psychologist" "Maintenance Man" "Student" "Janitor"]}
+   }
+  )
 
 (defn bot-start
   "Returns an empty game map"
