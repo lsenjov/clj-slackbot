@@ -5,9 +5,10 @@
   (:gen-class)
   )
 
-(def gameData
+(def ^:private gameData
   "List of locations and possible roles"
-  {:airplane {:name "Airplane"
+  {
+   :airplane {:name "Airplane"
               :roles ["First Class Passenger"
                       "Air Marshall"
                       "Mechanic"
@@ -240,8 +241,11 @@
                 (repeat (:location gameMap))
                 )
            {:message (str "Guess who the spy is!\n"
-                          "The first question is to be asked by:"
-                          (rand-nth (keys players))
+                          "One person is a spy, and does not know where the rest of you are.\n"
+                          (rand-nth (keys players)) " will start by asking any player a question.\n"
+                          "After responding, that player will then ask any player a question, except the one who just asked them.\n"
+                          "At any time, a player can `,accuse` another player of being a spy. The accusation only goes ahead if everyone but the target agrees. Each player can only make one accusation a game. Each player can `,agree` or `,disagree` with the vote.\n"
+                          "The spy can `,guess` the location at any time, except during an accusation. If the spy guesses correctly, they win. Otherwise, everyone else wins."
                           )
             }
            )
@@ -279,43 +283,48 @@
   "Allows the spy to guess the correct location"
   [gameMap commands {user :user channel :channel :as metaData}]
   (log/trace "Player" user "is guessing" (first commands))
-  (if (get-in gameMap [:players user :actions :guess])
-    ;; This player can guess the location
-    (if ((set (map :name (vals gameData)))
-         (first commands))
-      ;; This is a valid guess, maybe not correct though
-      (if (= (get-in gameData [(:location gameMap) :name])
-             (first commands))
-        ;; Correct guess!
-        (let [out (-> gameMap
-                      (assoc :message (str "The spy "
-                                           user
-                                           " correctly guessed you were at the "
-                                           (first commands)))
-                      (assoc :status :ended)
-                      (helpers/t-trace "Correct guess")
-                      )]
+  (if (:accusing gameMap)
+    ;; There's an accusation underway
+    (assoc gameMap :message {:channel user :message "Can't guess during an accusation."})
+    ;; No accusation underway
+    (if (get-in gameMap [:players user :actions :guess])
+      ;; This player can guess the location
+      (if ((set (map :name (vals gameData)))
+           (first commands))
+        ;; This is a valid guess, maybe not correct though
+        (if (= (get-in gameData [(:location gameMap) :name])
+               (first commands))
+          ;; Correct guess!
+          (let [out (-> gameMap
+                        (assoc :message (str "The spy "
+                                             user
+                                             " correctly guessed you were at the "
+                                             (first commands)))
+                        (assoc :status :ended)
+                        (helpers/t-trace "Correct guess")
+                        )]
             (score-game out user true)
             out
             )
-        ;; Incorrect guess
-        (let [out (-> gameMap
-                      (assoc :message {:message (str "The spy "
-                                                     user
-                                                     " failed to guess you were at the "
-                                                     (get-in gameData [(:location gameMap) :name])
-                                                     " and instead thought you were at the "
-                                                     (first commands))})
-                      (assoc :status :ended)
-                      (helpers/t-trace "Incorrect guess"))]
+          ;; Incorrect guess
+          (let [out (-> gameMap
+                        (assoc :message {:message (str "The spy "
+                                                       user
+                                                       " failed to guess you were at the "
+                                                       (get-in gameData [(:location gameMap) :name])
+                                                       " and instead thought you were at the "
+                                                       (first commands))})
+                        (assoc :status :ended)
+                        (helpers/t-trace "Incorrect guess"))]
             (score-game out user false)
             out
             )
-        )
-      ;; Invalid guess
-      (assoc gameMap :message {:message (str "Invalid guess.") :channel user}))
-    ;; This player can't guess the location
-    (assoc gameMap :message {:message (str "You are not allowed to guess the location") :channel user})
+          )
+        ;; Invalid guess
+        (assoc gameMap :message {:message (str "Invalid guess.") :channel user}))
+      ;; This player can't guess the location
+      (assoc gameMap :message {:message (str "You are not allowed to guess the location") :channel user})
+      )
     )
   )
 
