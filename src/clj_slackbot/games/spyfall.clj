@@ -241,8 +241,8 @@
       (if ((set (map :name (vals gameData)))
            (first commands))
         ;; This is a valid guess, maybe not correct though
-        (if (= (get-in gameData [(:location gameMap) :name])
-               (first commands))
+        (if (= (clojure.string/lower-case (get-in gameData [(:location gameMap) :name]))
+               (clojure.string/lower-case (first commands)))
           ;; Correct guess!
           (let [out (-> gameMap
                         (assoc :message (str "The spy "
