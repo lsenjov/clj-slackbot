@@ -45,6 +45,11 @@
   "The current scores in a map"
   (atom (open-scores score-filename)))
 
+;; If scores exist, load them
+(try (if-let [s (slurp "scores.edn")]
+       (reset! current-scores (clojure.edn/read-string s)))
+     (catch java.io.FileNotFoundException e nil))
+
 (defn- save-scores
   "Opens a scores file and saves the results. Returns the results object"
   [f r]
