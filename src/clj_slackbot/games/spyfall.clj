@@ -162,6 +162,7 @@
   (if (= "Spy" (:role playerMap))
     {:channel playerName
      :message (str "You are the spy! You must attempt to uncover the location.\n"
+                   "You can guess secretly by using `,#channel guess location.\n"
                    "Possible locations: "
                    (apply str
                           (interpose ", "
@@ -295,42 +296,39 @@
   "Allows a player to agree a player should be picked as the spy."
   [{{target :target} :accusing :as gameMap} commands {user :user channel :channel :as metaData}]
   (log/trace "Agree. target:" target)
-  (if (get-in gameMap [:accusing :remaining user])
-    ;; This player can still agree
-    (let [outMap (update-in gameMap
-                            [:accusing :remaining]
-                            disj
-                            user)]
-      (log/trace "Agree. outMap:" outMap)
-      (if (= 0 (count (get-in outMap [:accusing :remaining])))
-        ;; Everyone has decided the target is the spy
-        (if (= "Spy" (get-in outMap [:players target :role]))
-          ;; They were right! End the game
-          (let [out (-> outMap
-                        (assoc :status :ended)
-                        (assoc :message "The spy was caught!")
-                        )]
-            (score-game out target false)
-            out)
-          ;; They were wrong, end game, spy wins
-          (let [spy (get-spy outMap)
-                out (-> outMap
-                        (assoc :status :ended)
-                        (assoc :message (str "The spy was actually " spy))
-                        )]
-            (log/trace "Found spy as:" spy)
-            (score-game out spy true)
-            out)
-          )
-        (assoc outMap :message (str user
-                                    " agreed that "
-                                    target
-                                    " is the spy."))
-        )
+  (let [outMap (update-in gameMap
+                          [:accusing :remaining]
+                          disj
+                          user)]
+    (cond
+      ;; Player can't agree
+      (not (get-in gameMap [:accusing :remaining user]))
+      (assoc gameMap :message {:channel user
+                               :message "You are unable to agree"})
+      ;; Not everyone has agreed the target is a spy
+      (not (= 0 (count (get-in outMap [:accusing :remaining]))))
+      (assoc outMap :message
+             (str user " agreed that " target " is the spy."))
+      ;; Everyone has agreed that the target is a spy
+      ;; The target is a spy! Players win
+      (= "Spy" (get-in outMap [:players target :role]))
+      (let [out (-> outMap
+                    (assoc :status :ended)
+                    (assoc :message "The spy was caught!")
+                    )]
+        (score-game out target false)
+        out)
+      ;; The target was not the spy. Good guys lose
+      :failure
+      (let [spy (get-spy outMap)
+            out (-> outMap
+                    (assoc :status :ended)
+                    (assoc :message (str "The spy was actually " spy))
+                    )]
+        (log/trace "Found spy as:" spy)
+        (score-game out spy true)
+        out)
       )
-    ;; This player is unable to agree
-    (assoc gameMap :message {:channel user
-                             :message "You are unable to agree"})
     )
   )
 
@@ -356,31 +354,32 @@
 (defn accuse
   "Lets a player attempt to accuse another player"
   [gameMap [target & _] {user :user channel :channel :as metaData}]
-  (if (get-in gameMap [:players user :actions :accuse])
-    ;; This person can still accuse
-    (if (:accusing gameMap)
-      ;; An accusation is currently underway
-      (assoc gameMap :message "An accusation is currently underway already.")
-      ;; No accusation is taking place
-      (let [players (-> gameMap :players keys set)]
-        (if (players target)
-          ;; Target is in the available players, it's a valid accusation
-          (-> gameMap
-              (assoc :accusing
-                     {:target target
-                      :remaining (disj players user target)
-                      :accuser user})
-              (assoc :message (str user
-                                   " has accused "
-                                   target
-                                   " of being the spy. agree or disagree."))
-              )
-          (assoc gameMap :message "Invalid target to accuse")
+  (let [players (-> gameMap :players keys set)]
+    (cond
+      ;; Target doesn't start with @, add it
+      (not (= (first target) \@))
+      (recur gameMap [(str \@ target)] metaData)
+      ;; Player can't accuse
+      (not (get-in gameMap [:player user :actions :accuse]))
+      (assoc gameMap :message "You are unable to accuse anyone")
+      ;; Target is not in the list of players
+      (not (players target))
+      (assoc gameMap :message "Invalid target to accuse")
+      ;; All is well, accusation can go ahead
+      :can-accuse
+      (-> gameMap
+          ;; Set up the accusation
+          (assoc :accusing
+                 {:target target
+                  :remaining (disj players user target)
+                  :accuser user})
+          ;; Tell everyone it's going ahead
+          (assoc :message (str user
+                               " has accused "
+                               target
+                               " of being the spy. agree or disagree."))
           )
-        )
       )
-    ;; Unable to accuse, either not playing or already had their accusation
-    (assoc gameMap :message "You are unable to accuse anyone")
     )
   )
 
