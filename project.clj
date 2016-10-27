@@ -26,4 +26,8 @@
   {:dev {:repl-options {:init-ns clj-slackbot.core.handler}
          :dependencies [[javax.servlet/servlet-api "2.5"]
                         [ring-mock "0.1.5"]]}
-   :uberjar {:aot :all}})
+   :uberjar {:aot :all
+             :jvm-opts ["-Dclojure.spec.compile-asserts=false"]
+             }
+   }
+  )
