@@ -23,7 +23,9 @@
       (join [] md-a)
       (join [] md-b)
       (start [] md-a)
-      (move ["a2" "a4"] md-a)
+      (move ["a2" "a3"] md-a)
+      ;(move ["f7" "f6"] md-b)
       ;(#(s/explain ::clj-slackbot.games.chess/chessGame %))
+      :message
       )
   )

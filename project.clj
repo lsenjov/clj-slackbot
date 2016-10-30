@@ -14,7 +14,7 @@
                  [http-kit "2.1.18"]
 
                  ;; Logging
-                 [com.taoensso/timbre "4.3.1"]
+                 [com.taoensso/timbre "4.7.4"]
 
                  ;; Slack API
                  [org.julienxx/clj-slack "0.5.4"]

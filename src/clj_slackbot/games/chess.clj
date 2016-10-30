@@ -8,20 +8,50 @@
 
 (def ^:private gamePieces
   "A map of game pieces and their slack representations"
-  {:square-black ":black_large_square:"
-   :square-white ":white_large_square:"
-   :king-black ":chess_king_black:"
-   :king-white ":chess_king_white:"
-   :queen-black ":chess_king_black:"
-   :queen-white ":chess_king_white:"
-   :bishop-black ":chess_bishop_black:"
-   :bishop-white ":chess_bishop_white:"
-   :knight-black ":chess_knight_black:"
-   :knight-white ":chess_knight_white:"
-   :rook-black ":chess_rook_black:"
-   :rook-white ":chess_rook_white:"
-   :pawn-black ":chess_pawn_black:"
-   :pawn-white ":chess_pawn_white:"
+  {nil
+   {:black ":black_large_square:"
+    :white ":white_large_square:"}
+   :king
+   {:black ":chess_king_black:"
+    :white ":chess_king_white:"}
+   :queen
+   {:black ":chess_king_black:"
+    :white ":chess_king_white:"}
+   :bishop
+   {:black ":chess_bishop_black:"
+    :white ":chess_bishop_white:"}
+   :knight
+   {:black ":chess_knight_black:"
+    :white ":chess_knight_white:"}
+   :rook
+   {:black ":chess_rook_black:"
+    :white ":chess_rook_white:"}
+   :pawn
+   {:black ":chess_pawn_black:"
+    :white ":chess_pawn_white:"}
+   }
+  )
+(def ^:private gamePiecesChessfaq
+  "A map of game pieces and their chessfaq representations"
+  {
+   :king
+   {:black \k
+    :white \K}
+   :queen
+   {:black \q
+    :white \Q}
+   :bishop
+   {:black \b
+    :white \B}
+   :knight
+   {:black \n
+    :white \N}
+   :rook
+   {:black \r
+    :white \R}
+   :pawn
+   {:black \p
+    :white \P}
    }
   )
 (def ^:private pieceTypes
@@ -94,28 +124,32 @@
 (defn- place-piece
   "Places a piece on the gameboard"
   [gameMap {{rank ::rank file ::file} ::position :as piece}]
-  {:pre [(s/valid? ::piece piece)
+  {:pre [(s/assert ::piece piece)
          ]
-   ;;:post [(s/valid? ::chessGame %)]
+   :post [(s/assert ::chessGame %)]
    }
   (assoc-in gameMap [::pieces rank file] piece)
   )
 (defn- get-piece
   "Gets a piece at a position on the gameboard"
-  [gameMap {rank ::rank file ::file :as piece}]
-  {:pre [(s/valid? ::position piece)
-         (s/valid? ::chessGame gameMap)]
-   :post [(s/valid? (s/or :piece ::piece
+  [gameMap {rank ::rank file ::file :as pos}]
+  {:pre [(s/assert ::position pos)
+         (s/assert ::chessGame gameMap)]
+   :post [(s/assert (s/or :piece ::piece
                          :nil nil?)
                     %)]
    }
-  (get-in gameMap [::pieces rank file])
+  (log/trace "get-piece. gameMap/pos:" gameMap pos)
+  (let [p (get-in gameMap [::pieces rank file])]
+    (log/trace "get-piece. Return:" p)
+    p
+    )
   )
 
 (defn- create-piece
   "Short way to create a piece from arguments"
   [colour pieceType rank file]
-  {:post (s/valid? ::piece %)}
+  {:post [(s/assert ::piece %)]}
   {::colour colour
    ::type pieceType
    ::position {::rank rank ::file file}}
@@ -163,11 +197,106 @@
    :message "Game created"}
   )
 
+(defn- print-piece
+  "Returns the slack representation of the piece at x y"
+  [gameMap x y]
+  (if-let [{colour ::colour t ::type} (get-in gameMap [::pieces x y])]
+    (get-in gamePieces [t colour])
+    (get-in gamePieces [nil
+                        (if (= 0 (rem (+ x y) 2))
+                          :black
+                          :white
+                          )
+                        ]
+            )
+    )
+  )
+(defn- print-board
+  "Outputs a board in text format for slack"
+  [gameMap]
+  (apply str
+         (for [y (range 8 0 -1)]
+           (apply str \newline
+                  (for [x (range 1 9)]
+                    (print-piece gameMap x y)
+                    )
+                  )
+           )
+         )
+  )
+
+(defn- reduce-pieces-chessfaq
+  "Taking a sequence of characters, reduces to a fenstring"
+  ([charSeq]
+   (reduce-pieces-chessfaq (list (first charSeq)) (rest charSeq)))
+  ([s charSeq]
+   {:pre [(s/assert (s/coll-of char?) s)
+          (s/assert (s/or :charCollection (s/coll-of char?)
+                          :string string?)
+                    charSeq)]}
+   (cond
+     ;; Final
+     (= 0 (count charSeq))
+     (apply str s)
+     ;; Nothing in s
+     (= 0 (count s))
+     (recur (concat s (list (first charSeq)))
+            (rest charSeq))
+     ;; First char of sequence is \1 (a nil) and last char is a number
+     (let [c (int (last s))]
+       (and (= \1 (first charSeq))
+            (>= c (int \1))
+            (<= c (int \8)))
+       )
+     (recur (concat (butlast s)
+                    ;; Increment the character by one
+                    (-> s last int inc char list))
+            (rest charSeq))
+     ;; Just add the character
+     :otherwise
+     (recur (concat s (list (first charSeq)))
+            (rest charSeq))
+     )
+   )
+  )
+(defn- print-piece-chessfaq
+  "Returns the character at the spot on the board"
+  [gameMap x y]
+  (if-let [{colour ::colour t ::type} (get-in gameMap [::pieces x y])]
+    (get-in gamePiecesChessfaq [t colour])
+    \1
+    )
+  )
+(defn- print-file-chessfaq
+  "Outputs a board file in fen99=items format"
+  [gameMap ^Integer file]
+  (apply str "fen" (- 19 file) \=
+         (->> (map print-piece-chessfaq
+                   (repeat gameMap)
+                   (range 1 9)
+                   (repeat file))
+              (#(do (log/trace "file" file "is:" (into [] %)) %))
+              (reduce-pieces-chessfaq '())
+              )
+         )
+  )
+(defn- print-board-chessfaq
+  "Outputs a board in url format"
+  [gameMap]
+  (apply str "http://chessfaq.appspot.com/diagram?"
+         (interpose \&
+                    (map print-file-chessfaq
+                         (repeat gameMap)
+                         (range 1 9))
+                    )
+         )
+  )
+
 (defn join
   "Has the player join the game"
   [gameMap commands {user :user channel :channel :as metaData}]
-  {:pre [(s/valid? string? user)
-         (s/valid? string? channel)]
+  {:pre [(s/assert string? user)
+         (s/assert string? channel)]
    }
   (log/info "join. Current players:" (get-in gameMap [::players]))
   (cond
@@ -185,7 +314,6 @@
                    )
     )
   )
-
 (defn leave
   "Leave if already in the game"
   [gameMap commands {user :user channel :channel :as metaData}]
@@ -198,7 +326,6 @@
         ;; Returns message
         (assoc :message (str user " has left the game.")))
     (assoc :message (str user " was not playing anyway."))))
-
 (defn status
   "Show status of the current game"
   [gameMap commands {user :user channel :channel :as metaData}]
@@ -222,10 +349,150 @@
     )
   )
 
+
+(defn- str-to-pos
+  "Changes a string representation ('a5') to a position"
+  [^String mov]
+  {:pre [(s/assert (s/and string?
+                          #(= 2 (count %)))
+                   mov)]
+   :post [(s/assert ::position %)]}
+  {::rank (->> (first mov)
+               (int)
+               (#(- % (int \a)))
+               (inc))
+   ::file (- (int (second mov)) (int \0))}
+  )
+(defn- pos-to-str
+  "Changes a position to a string representation ('a5')"
+  [pos]
+  {:pre [(s/assert ::position pos)]
+   :post [(s/assert (s/and string?
+                           #(= 2 (count %)))
+                    %)]
+   }
+  (str (char (+ (dec (int \a)) (::rank pos)))
+       (char (+ (int \0) (::file pos))))
+  )
+
+(defn- move-pawn-valid?
+  "Is the specified movement valid? Returns a move if true, else nil"
+  [gameMap
+   {{fromX ::rank fromY ::file} ::position colour ::colour :as piece}
+   {toX ::rank toY ::file :as positionTo}]
+  {:pre [(s/assert ::chessGame gameMap)
+         (s/assert ::piece piece)
+         (s/assert ::position positionTo)]
+   :post [(s/assert (s/or :wrong nil? :valid ::move) %)]}
+  (log/trace "move-pawn-valid?" piece positionTo)
+  (cond
+    ;; Moving one space forward
+    ;; Same rank
+    (and (= fromX toX)
+         (= toY (+ fromY
+                   ;; If it's white, move one forward
+                   (if (= :white colour) 1 -1)
+                   )
+            )
+         ;; Make sure there's no piece where it's moving to
+         (nil? (get-piece gameMap positionTo))
+         )
+    (do
+      (log/trace "move-pawn-valid. Move one space forward")
+      {::turn (::turn gameMap)
+       ::startPosition (::position piece)
+       ::endPosition positionTo
+       ::moveType :move}
+      )
+    ;; Moving two files in same rank
+    (and (= fromX toX)
+         (= (if (= colour :white) 2 7) fromY)
+         (= (if (= colour :white) 4 5) fromY))
+    (do
+      (log/trace "move-pawn-valid. Move two spaces forward")
+      {::turn (::turn gameMap)
+       ::startPosition (::position piece)
+       ::endPosition positionTo
+       ::moveType :move}
+      )
+    ;; Capturing
+    (and (or (= fromX (dec toX))
+             (= fromX (inc toX)))
+         (= toY (+ fromY (if (= :white colour) 1 -1)))
+         ;; Is the colour of the target the opposite of your colour? And does it actually exist?
+         (= (::colour (get-piece gameMap positionTo))
+            (if (= :white colour) :black :white))
+         )
+    (do
+      (log/trace "move-pawn-valid. Capturing")
+      {::turn (::turn gameMap)
+       ::startPosition (::position piece)
+       ::endPosition positionTo
+       ::moveType :capture}
+      )
+    ;; TODO
+    :not-found
+    (do
+      (log/trace "move-pawn-assert Invalid move")
+      nil
+      )
+    )
+  )
+
+(defn- remove-piece
+  "Clears a position on the gameboard"
+  [gameMap position]
+  {:pre [(s/assert ::chessGame gameMap)
+         (s/assert ::position position)]
+   ;:post [(s/assert ::chessGame gameMap)]
+   }
+  (log/trace "remove piece. position:" position)
+  (update-in gameMap [::pieces (::rank position)] dissoc (::file position))
+  )
+
+(defn- move-select
+  "Given a correct piece, attempt to make a move"
+  [gameMap positionFrom positionTo]
+  {:pre [(s/assert ::chessGame gameMap)
+        (s/assert ::position positionFrom)
+        (s/assert ::position positionTo)]
+   ;:post [(s/assert ::chessGame %)]
+   }
+  (log/trace "move-select. from/to:" positionFrom positionTo)
+  (let [{colour ::colour t ::type :as piece} (get-piece gameMap positionFrom)]
+    (if-let [m
+             ;; Each of the below will return a ::move if valid, else nil
+             (cond
+               (= :pawn t)
+               (move-pawn-assert gameMap piece positionTo)
+               :not-found
+               nil
+               )
+             ]
+      ;; Valid move!
+      (do
+        (log/trace "Valid move! Move is:" m)
+        (-> gameMap
+          (update-in [::history] conj m)
+          (place-piece (assoc piece ::position positionTo))
+          (#(do (log/trace "Piece placed") %))
+          (remove-piece (::position piece))
+          (#(do (log/trace "Old Piece removed") %))
+          (update-in [::turn] inc)
+          (assoc-message "Move successful")
+          (#(concat-message % (print-board %)))
+          )
+        )
+      ;; Invalid move
+      (assoc-message gameMap "Invalid move")
+      )
+    )
+  )
+
 (defn start
   "Starts the game if there's enough players"
   [{players ::players :as gameMap} commands {user :user channel :channel :as metaData}]
-  {:post [(s/valid? ::chessGame %)]}
+  {:post [(s/assert ::chessGame %)]}
   (if (= (count players) 2)
     ;; Create game
     (-> gameMap
@@ -252,6 +519,7 @@
                 )
          )
         (#(assoc-message % (str "Player " (-> % ::colours :white) " to begin.")))
+        (#(concat-message % (print-board %)))
         )
     ;; Not enough players
     (assoc-message gameMap
@@ -263,69 +531,18 @@
     )
   )
 
-(defn- str-to-pos
-  "Changes a string representation ('a5') to a position"
-  [^String mov]
-  {:pre [(s/valid? (s/and string?
-                          #(= 2 (count %)))
-                   mov)]
-   :post [(s/valid? ::position %)]}
-  {::rank (->> (first mov)
-               (int)
-               (#(- % (int \a)))
-               (inc))
-   ::file (- (int (second mov)) (int \0))}
-  )
-(defn- pos-to-str
-  "Changes a position to a string representation ('a5')"
-  [pos]
-  {:pre [(s/valid? ::position pos)]
-   :post [(s/valid? (s/and string?
-                           #(= 2 (count %)))
-                    %)]
-   }
-  (str (char (+ (dec (int \a)) (::rank pos)))
-       (char (+ (int \0) (::file pos))))
-  )
-
-(defn- move-pawn
-  "Attempts to move a pawn"
-  [gameMap piece positionTo]
-  {:pre [(s/valid? ::chessGame gameMap)
-        (s/valid? ::piece piece)
-        (s/valid? ::position positionTo)]
-   :post [(s/valid? ::chessGame %)]}
-  gameMap
-  )
-(defn- move-select
-  "Given a correct piece, attempt to make a move"
-  [gameMap positionFrom positionTo]
-  {:pre [(s/valid? ::chessGame gameMap)
-        (s/valid? ::position positionFrom)
-        (s/valid? ::position positionTo)]
-   :post [(s/valid? ::chessGame %)]}
-  (let [{colour ::colour t ::type :as piece} (get-piece gameMap positionFrom)]
-    (cond
-      (= :pawn t)
-      (move-pawn gameMap piece positionTo)
-      :not-found
-      (assoc-message gameMap "Invalid move")
-      )
-    )
-  )
-
 (defn move
   "Make a move on your turn"
   [gameMap [firstMove secondMove] {user :user channel :channel :as metaData}]
-  {:pre [(s/valid? ::chessGame gameMap)
-         (s/valid? (s/and string?
+  {:pre [(s/assert ::chessGame gameMap)
+         (s/assert (s/and string?
                           #(= 2 (count %)))
                    firstMove)
-         (s/valid? (s/and string?
+         (s/assert (s/and string?
                           #(= 2 (count %)))
                    secondMove)
          ]
-   :post [(s/valid? ::chessGame %)]
+   :post [(s/assert ::chessGame %)]
    }
   (log/trace "move. moves:" firstMove secondMove)
   (try
@@ -347,7 +564,6 @@
                    (str-to-pos firstMove)
                    (str-to-pos secondMove))
       )
-    (catch AssertionError e
-      (assoc-message gameMap "Invalid move"))
+    ;(catch AssertionError e (do (log/trace "move. Caught exception:" e) (throw e) (assoc-message gameMap "Invalid move")))
     )
   )
