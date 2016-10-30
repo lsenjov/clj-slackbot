@@ -373,6 +373,12 @@
   (str (char (+ (dec (int \a)) (::rank pos)))
        (char (+ (int \0) (::file pos))))
   )
+(defn- make-range
+  "Makes a range from start (inclusive) to fin (exclusive), with a step of 1.
+  Accounts for fin being less than start, and may make the step -1"
+  [^Integer start ^Integer fin]
+  (range start fin (if (> fin start) 1 -1))
+  )
 
 (defn- move-pawn-valid?
   "Is the specified movement valid? Returns a move if true, else nil"
@@ -429,7 +435,7 @@
        ::endPosition positionTo
        ::moveType :capture}
       )
-    ;; TODO
+    ;; TODO en-passant
     :not-found
     (do
       (log/trace "move-pawn-valid? Invalid move")
@@ -437,6 +443,116 @@
       )
     )
   )
+
+(defn- move-rook-valid?
+  "Is the specified movement valid? Returns a move if true, else nil"
+  [gameMap
+   {{fromX ::rank fromY ::file} ::position colour ::colour :as piece}
+   {toX ::rank toY ::file :as positionTo}]
+  {:pre [(s/assert ::chessGame gameMap)
+         (s/assert ::piece piece)
+         (s/assert ::position positionTo)]
+   :post [(s/valid? (s/or :wrong nil? :valid ::move) %)]}
+  (cond
+    ;; Must make sure it's moving in a straight line
+    (not (or (= fromX toX)
+             (= fromY toY)))
+    nil
+    ;; Final position is a friendly unit
+    (= colour (::colour (get-piece gameMap positionTo)))
+    nil
+    ;; Moving horisontally
+    (= fromX toX)
+    (if (->>
+          ;; Get the pieces along the way
+          (map (fn [m x y] (get-piece m {::rank x ::file y}))
+               (repeat gameMap)
+               ;; Ignore this square
+               (repeat toX)
+               (rest (range fromY toY (if (> toY fromY) 1 -1)))
+               )
+          (remove nil?)
+          (count)
+          ;; If true, no pieces between us and target, horisontally
+          (= 0)
+          )
+      {::turn (::turn gameMap)
+       ::startPosition (::position piece)
+       ::endPosition positionTo
+       ::moveType (if (get-piece gameMap positionTo) :capture :move)}
+      )
+    ;; Moving vertically
+    (= fromY toY)
+    (if (->>
+          ;; Get the pieces along the way
+          (map (fn [m x y] (get-piece m {::rank x ::file y}))
+               (repeat gameMap)
+               ;; Ignore this square
+               (rest (range fromX toX (if (> toX fromX) 1 -1)))
+               (repeat toY)
+               )
+          (remove nil?)
+          (count)
+          ;; If true, no pieces between us and target, horisontally
+          (= 0)
+          )
+      {::turn (::turn gameMap)
+       ::startPosition (::position piece)
+       ::endPosition positionTo
+       ::moveType (if (get-piece gameMap positionTo) :capture :move)}
+      )
+    ;; Should never reach here
+    :not-found
+    (do
+      (log/error "Rook-valid? Should never reach here.")
+      nil)
+    )
+  )
+
+(defn- move-bishop-valid?
+  "Is the specified movement valid? Returns a move if true, else nil"
+  [gameMap
+   {{fromX ::rank fromY ::file} ::position colour ::colour :as piece}
+   {toX ::rank toY ::file :as positionTo}]
+  {:pre [(s/assert ::chessGame gameMap)
+         (s/assert ::piece piece)
+         (s/assert ::position positionTo)]
+   :post [(s/valid? (s/or :wrong nil? :valid ::move) %)]}
+  (cond
+    ;; Is the target your own?
+    (= colour (::colour (get-piece gameMap positionTo)))
+    nil
+    ;; Did it not move in a diagonal line?
+    (not (= (Math/abs (- fromX toX))
+            (Math/abs (- fromY toY))))
+    nil
+    ;; Are all the spaces clear?
+    (->> (map (fn [m x y] (get-piece m {::rank x ::file y}))
+              (repeat gameMap)
+              (make-range fromX toX)
+              (make-range fromY toY)
+              )
+         ;; First result will be this piece, remove it
+         (rest)
+         ;; All empties will be nil
+         (remove nil?)
+         (count)
+         ;; If true, no pieces between us and target, horisontally
+         (= 0)
+         )
+    {::turn (::turn gameMap)
+     ::startPosition (::position piece)
+     ::endPosition positionTo
+     ::moveType (if (get-piece gameMap positionTo) :capture :move)}
+    ;;Path isn't clear
+    :pieces-blocking
+    (do
+      (log/trace "bishop-valid? pieces blocking.")
+      nil
+      )
+    )
+  )
+
 
 (defn- remove-piece
   "Clears a position on the gameboard"
@@ -461,10 +577,13 @@
   (let [{colour ::colour t ::type :as piece} (get-piece gameMap positionFrom)]
     (if-let [m
              ;; Each of the below will return a ::move if valid, else nil
-             (cond
-               (= :pawn t)
+             (case t
+               :pawn
                (move-pawn-valid? gameMap piece positionTo)
-               :not-found
+               :rook
+               (move-rook-valid? gameMap piece positionTo)
+               :bishop
+               (move-bishop-valid? gameMap piece positionTo)
                nil
                )
              ]
