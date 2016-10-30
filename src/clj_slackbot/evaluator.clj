@@ -1,9 +1,6 @@
 (ns clj-slackbot.evaluator
-  (:require [clojail.core :refer [sandbox]]
-            [clojail.testers :refer [secure-tester-without-def blanket]]
-            [taoensso.timbre :as log]
+  (:require [taoensso.timbre :as log]
             [clj-slackbot.names :as names]
-            [clojure.repl]
             [clj-slackbot.helpers :as helpers]
 
             ;; Add games below here
@@ -12,12 +9,7 @@
             [clj-slackbot.games.spyfall :as spyfall]
             [clj-slackbot.games.chess :as chess]
             )
-  (:import java.io.StringWriter))
-
-(def clj-slackbot-tester
-  (conj secure-tester-without-def (blanket "clj-slackbot")))
-
-(def sb (sandbox clj-slackbot-tester))
+  )
 
 (def games "A map atom of games keyed by channel." (atom {:message ""}))
 
