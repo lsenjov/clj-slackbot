@@ -15,8 +15,8 @@
    {:black ":chess_king_black:"
     :white ":chess_king_white:"}
    :queen
-   {:black ":chess_king_black:"
-    :white ":chess_king_white:"}
+   {:black ":chess_queen_black:"
+    :white ":chess_queen_white:"}
    :bishop
    {:black ":chess_bishop_black:"
     :white ":chess_bishop_white:"}
@@ -553,6 +553,58 @@
     )
   )
 
+(defn- move-knight-valid?
+  "Is the specified movement valid? Returns a move if true, else nil"
+  [gameMap
+   {{fromX ::rank fromY ::file} ::position colour ::colour :as piece}
+   {toX ::rank toY ::file :as positionTo}]
+  {:pre [(s/assert ::chessGame gameMap)
+         (s/assert ::piece piece)
+         (s/assert ::position positionTo)]
+   :post [(s/valid? (s/or :wrong nil? :valid ::move) %)]}
+  (cond
+    ;; Is the target your own?
+    (= colour (::colour (get-piece gameMap positionTo)))
+    nil
+    ;; Did it move like a gentlemanly knight should?
+    (let [m (->> [(- fromX toX) (- fromY toY)]
+                 (map #(Math/abs %))
+                 (sort)
+                 )
+          ]
+      (and (= 1 (first m))
+           (= 2 (second m))))
+    {::turn (::turn gameMap)
+     ::startPosition (::position piece)
+     ::endPosition positionTo
+     ::moveType (if (get-piece gameMap positionTo) :capture :move)}
+    ;; Didn't move correctly, fail
+    :invalid-move
+    nil
+    )
+  )
+
+(defn- move-queen-valid?
+  "Is the specified movement valid? Returns a move if true, else nil"
+  [gameMap
+   {{fromX ::rank fromY ::file} ::position colour ::colour :as piece}
+   {toX ::rank toY ::file :as positionTo}]
+  {:pre [(s/assert ::chessGame gameMap)
+         (s/assert ::piece piece)
+         (s/assert ::position positionTo)]
+   :post [(s/valid? (s/or :wrong nil? :valid ::move) %)]}
+  ;; Moves as either a rook or bishop
+  (if-let [rm (move-rook-valid? gameMap piece positionTo)]
+    ;; Correct! Return the move
+    rm
+    (if-let [bm (move-bishop-valid? gameMap piece positionTo)]
+      ;; Correct bishop move!
+      bm
+      nil
+      )
+    )
+  )
+    
 
 (defn- remove-piece
   "Clears a position on the gameboard"
@@ -584,6 +636,10 @@
                (move-rook-valid? gameMap piece positionTo)
                :bishop
                (move-bishop-valid? gameMap piece positionTo)
+               :knight
+               (move-knight-valid? gameMap piece positionTo)
+               :queen
+               (move-queen-valid? gameMap piece positionTo)
                nil
                )
              ]
@@ -665,6 +721,9 @@
   (log/trace "move. moves:" firstMove secondMove)
   (try
     (cond
+      ;; Moves are the same
+      (= firstMove secondMove)
+      (assoc-message gameMap "Moves cannot be the same")
       ;; Not the correct player
       (not (= user (get-in gameMap [::colours
                                     ;; White or black's turn to move?
