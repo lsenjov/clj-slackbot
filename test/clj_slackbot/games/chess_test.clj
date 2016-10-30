@@ -33,6 +33,7 @@
       (move ["d7" "d6"] md-b)
       (move ["d2" "d3"] md-a)
       (move ["e8" "b5"] md-b)
+      (move ["d1" "d2"] md-a)
       ;(#(s/explain ::clj-slackbot.games.chess/chessGame %))
       :message
       ;::chess/history

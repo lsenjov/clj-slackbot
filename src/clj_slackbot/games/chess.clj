@@ -604,7 +604,33 @@
       )
     )
   )
-    
+
+(defn- move-king-valid?
+  "Is the specified movement valid? Returns a move if true, else nil"
+  [gameMap
+   {{fromX ::rank fromY ::file} ::position colour ::colour :as piece}
+   {toX ::rank toY ::file :as positionTo}]
+  {:pre [(s/assert ::chessGame gameMap)
+         (s/assert ::piece piece)
+         (s/assert ::position positionTo)]
+   :post [(s/valid? (s/or :wrong nil? :valid ::move) %)]}
+  (cond
+    ;; Is the target your own?
+    (= colour (::colour (get-piece gameMap positionTo)))
+    nil
+    ;; Is the movement no more than 1?
+    (= 1 (max (Math/abs (- fromX toX))
+              (Math/abs (- fromY toY))))
+    {::turn (::turn gameMap)
+     ::startPosition (::position piece)
+     ::endPosition positionTo
+     ::moveType (if (get-piece gameMap positionTo) :capture :move)}
+    ;; Castling TODO
+    ;; Invalid move
+    :invalid-move
+    nil
+    )
+  )
 
 (defn- remove-piece
   "Clears a position on the gameboard"
@@ -640,10 +666,12 @@
                (move-knight-valid? gameMap piece positionTo)
                :queen
                (move-queen-valid? gameMap piece positionTo)
+               :king
+               (move-king-valid? gameMap piece positionTo)
                nil
                )
              ]
-      ;; Valid move!
+      ;; Valid move! Must also check for checks
       (do
         (log/trace "Valid move! Move is:" m)
         (-> gameMap
