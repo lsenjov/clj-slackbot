@@ -1,6 +1,6 @@
 (ns clj-slackbot.games.werewolf
   (:require [taoensso.timbre :as log]
-            [clj-slackbot.helpers :as helpers]
+            [clj-slackbot.helpers :as helpers :refer :all]
             )
   (:gen-class)
   )
@@ -176,38 +176,6 @@
            (fn [[n m]] {n (get m action)})
            (filter (fn [[_ v]] (some #{action} (keys v))) actionMap) ;; Returns list of k-v vectors
            )))
-
-(defn- create-message
-  "Wraps a message in a map in a list, if it's not already. Won't do anything if m is not a string or map"
-  ([message]
-  (if (string? message)
-    (recur {:message message})
-    (if (map? message)
-      (list message)
-      message)))
-  ([message channel]
-   (create-message {:message message :channel channel}))
-  )
-
-(defn- assoc-message
-  "Associates a message with the gameMap"
-  ([gameMap message]
-   (log/trace "assoc-message. message:" message)
-   (assoc gameMap :message (create-message message)))
-  ([gameMap message channel]
-   (log/trace "assoc-message. message:" message "channel:" channel)
-   (assoc gameMap :message (create-message message channel)))
-  )
-
-(defn- concat-message
-  "Adds messages to already existing messages"
-  ([gameMap message]
-   (log/trace "concat-message. message:" message)
-   (update-in gameMap [:message] concat (create-message message)))
-  ([gameMap message channel]
-   (log/trace "concat-message. message:" message "channel:" channel)
-   (update-in gameMap [:message] concat (create-message message channel)))
-  )
 
 (defn- count-votes
   "Returns a map of vote targets to the number of players that voted for it"
