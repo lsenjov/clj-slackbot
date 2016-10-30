@@ -107,7 +107,7 @@
   )
 (s/def ::move (s/keys :req [::turn ::startPosition
                             ::endPosition ::moveType]))
-(s/def ::history (s/coll-of string?))
+(s/def ::history (s/coll-of ::move))
 (s/def ::players (s/coll-of string?))
 (s/def ::message (s/or :string string?
                        :map (s/map-of keyword? string?)
@@ -135,11 +135,10 @@
   [gameMap {rank ::rank file ::file :as pos}]
   {:pre [(s/assert ::position pos)
          (s/assert ::chessGame gameMap)]
-   :post [(s/assert (s/or :piece ::piece
-                         :nil nil?)
+   :post [(s/valid? (s/or :piece ::piece :nil nil?)
                     %)]
    }
-  (log/trace "get-piece. gameMap/pos:" gameMap pos)
+  (log/trace "get-piece. pos:" pos)
   (let [p (get-in gameMap [::pieces rank file])]
     (log/trace "get-piece. Return:" p)
     p
@@ -383,7 +382,7 @@
   {:pre [(s/assert ::chessGame gameMap)
          (s/assert ::piece piece)
          (s/assert ::position positionTo)]
-   :post [(s/assert (s/or :wrong nil? :valid ::move) %)]}
+   :post [(s/valid? (s/or :wrong nil? :valid ::move) %)]}
   (log/trace "move-pawn-valid?" piece positionTo)
   (cond
     ;; Moving one space forward
@@ -407,7 +406,7 @@
     ;; Moving two files in same rank
     (and (= fromX toX)
          (= (if (= colour :white) 2 7) fromY)
-         (= (if (= colour :white) 4 5) fromY))
+         (= (if (= colour :white) 4 5) toY))
     (do
       (log/trace "move-pawn-valid. Move two spaces forward")
       {::turn (::turn gameMap)
@@ -424,7 +423,7 @@
             (if (= :white colour) :black :white))
          )
     (do
-      (log/trace "move-pawn-valid. Capturing")
+      (log/trace "move-pawn-valid?. Capturing")
       {::turn (::turn gameMap)
        ::startPosition (::position piece)
        ::endPosition positionTo
@@ -433,7 +432,7 @@
     ;; TODO
     :not-found
     (do
-      (log/trace "move-pawn-assert Invalid move")
+      (log/trace "move-pawn-valid? Invalid move")
       nil
       )
     )
@@ -464,7 +463,7 @@
              ;; Each of the below will return a ::move if valid, else nil
              (cond
                (= :pawn t)
-               (move-pawn-assert gameMap piece positionTo)
+               (move-pawn-valid? gameMap piece positionTo)
                :not-found
                nil
                )
