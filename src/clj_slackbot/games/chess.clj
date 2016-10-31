@@ -769,6 +769,10 @@
                    (str-to-pos firstMove)
                    (str-to-pos secondMove))
       )
-    ;(catch AssertionError e (do (log/trace "move. Caught exception:" e) (throw e) (assoc-message gameMap "Invalid move")))
+    (catch AssertionError e
+      (do (log/trace "move. Caught exception:" e)
+          (assoc-message gameMap "Invalid move")
+          )
+      )
     )
   )
