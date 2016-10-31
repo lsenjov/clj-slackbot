@@ -101,7 +101,7 @@
 (s/def ::endPosition ::position)
 (s/def ::moveType (s/and keyword?
                          #((set [:castleKingside :castleQueenside
-                                :move :capture])
+                                 :move :capture])
                            %)
                          )
   )
@@ -348,7 +348,6 @@
     )
   )
 
-
 (defn- str-to-pos
   "Changes a string representation ('a5') to a position"
   [^String mov]
@@ -443,7 +442,6 @@
       )
     )
   )
-
 (defn- move-rook-valid?
   "Is the specified movement valid? Returns a move if true, else nil"
   [gameMap
@@ -508,7 +506,6 @@
       nil)
     )
   )
-
 (defn- move-bishop-valid?
   "Is the specified movement valid? Returns a move if true, else nil"
   [gameMap
@@ -552,7 +549,6 @@
       )
     )
   )
-
 (defn- move-knight-valid?
   "Is the specified movement valid? Returns a move if true, else nil"
   [gameMap
@@ -583,7 +579,6 @@
     nil
     )
   )
-
 (defn- move-queen-valid?
   "Is the specified movement valid? Returns a move if true, else nil"
   [gameMap
@@ -604,7 +599,6 @@
       )
     )
   )
-
 (defn- move-king-valid?
   "Is the specified movement valid? Returns a move if true, else nil"
   [gameMap
@@ -643,46 +637,110 @@
   (update-in gameMap [::pieces (::rank position)] dissoc (::file position))
   )
 
+(defn- move-valid?
+  "Is the specified movement valid? Returns a move if true, else nil"
+  [gameMap
+   {{fromX ::rank fromY ::file} ::position
+    colour ::colour
+    t ::type
+    :as piece}
+   {toX ::rank toY ::file :as positionTo}]
+  {:pre [(s/assert ::chessGame gameMap)
+         (s/assert ::piece piece)
+         (s/assert ::position positionTo)]
+   :post [(s/valid? (s/or :wrong nil? :valid ::move) %)]}
+  ;; Each of the below will return a ::move if valid, else nil
+  (case t
+    :pawn
+    (move-pawn-valid? gameMap piece positionTo)
+    :rook
+    (move-rook-valid? gameMap piece positionTo)
+    :bishop
+    (move-bishop-valid? gameMap piece positionTo)
+    :knight
+    (move-knight-valid? gameMap piece positionTo)
+    :queen
+    (move-queen-valid? gameMap piece positionTo)
+    :king
+    (move-king-valid? gameMap piece positionTo)
+    nil
+    )
+  )
+
+(defn- in-check?
+  "Checks if a colour is currently in check, returns a move if yes, else false"
+  [gameMap colour]
+  {:pre [(s/assert ::chessGame gameMap)
+         (s/assert ::colour colour)]
+   :post [(s/valid? (s/or :nil nil?
+                          :move ::move)
+                    %)]
+   }
+  (log/trace "in-check?" colour)
+  (let [;; All pieces on the board
+        pieces
+        (->> gameMap
+             ::pieces
+             vals
+             (mapcat vals)
+             )
+        ;; If white, all the black pieces, and vice versa
+        enemyPieces (filter #(= (if (= colour :white) :black :white)
+                                (::colour %)
+                                )
+                            pieces
+                            )
+        ;; The piece of the king of colour
+        kingPiece (first (filter #(and (= colour (::colour %))
+                                       (= :king (::type %)))
+                                 pieces
+                                 )
+                         )
+        ]
+    (log/trace "in-check? kingPiece:" kingPiece)
+    (->> (map move-valid?
+              (repeat gameMap)
+              pieces
+              (repeat (::position kingPiece)))
+         (remove nil?)
+         first
+         (#(do (log/trace "in-check? returning:" %) %))
+         )
+    )
+  )
+
 (defn- move-select
   "Given a correct piece, attempt to make a move"
   [gameMap positionFrom positionTo]
   {:pre [(s/assert ::chessGame gameMap)
-        (s/assert ::position positionFrom)
-        (s/assert ::position positionTo)]
+         (s/assert ::position positionFrom)
+         (s/assert ::position positionTo)]
    ;:post [(s/assert ::chessGame %)]
    }
   (log/trace "move-select. from/to:" positionFrom positionTo)
   (let [{colour ::colour t ::type :as piece} (get-piece gameMap positionFrom)]
     (if-let [m
-             ;; Each of the below will return a ::move if valid, else nil
-             (case t
-               :pawn
-               (move-pawn-valid? gameMap piece positionTo)
-               :rook
-               (move-rook-valid? gameMap piece positionTo)
-               :bishop
-               (move-bishop-valid? gameMap piece positionTo)
-               :knight
-               (move-knight-valid? gameMap piece positionTo)
-               :queen
-               (move-queen-valid? gameMap piece positionTo)
-               :king
-               (move-king-valid? gameMap piece positionTo)
-               nil
-               )
+             (move-valid? gameMap piece positionTo)
              ]
       ;; Valid move! Must also check for checks
       (do
         (log/trace "Valid move! Move is:" m)
-        (-> gameMap
-          (update-in [::history] conj m)
-          (place-piece (assoc piece ::position positionTo))
-          (#(do (log/trace "Piece placed") %))
-          (remove-piece (::position piece))
-          (#(do (log/trace "Old Piece removed") %))
-          (update-in [::turn] inc)
-          (assoc-message "Move successful")
-          (#(concat-message % (print-board %)))
+        (let [newMap
+              (-> gameMap
+                  (update-in [::history] conj m)
+                  (place-piece (assoc piece ::position positionTo))
+                  (#(do (log/trace "Piece placed") %))
+                  (remove-piece (::position piece))
+                  (#(do (log/trace "Old Piece removed") %))
+                  (update-in [::turn] inc)
+                  (assoc-message "Move successful")
+                  (#(concat-message % (print-board %)))
+                  )
+              ]
+          (if (in-check? newMap colour)
+            (assoc-message gameMap "Invalid move, would put you in check.")
+            newMap
+            )
           )
         )
       ;; Invalid move
@@ -772,6 +830,76 @@
     (catch AssertionError e
       (do (log/trace "move. Caught exception:" e)
           (assoc-message gameMap "Invalid move")
+          )
+      )
+    )
+  )
+
+(defn- print-move
+  "Prints a single move in a readable format"
+  [{turn ::turn moveType ::moveType
+    startPos ::startPosition endPos ::endPosition
+    :as move}]
+  {:pre [(s/assert ::move move)]
+   :post [(s/valid? string? %)]}
+  (str turn
+       ": "
+       (pos-to-str startPos)
+       (if (= :capture moveType)
+         "x"
+         " "
+         )
+       (pos-to-str endPos)
+       )
+  )
+
+(defn history
+  "Make a move on your turn"
+  [gameMap [] {user :user channel :channel :as metaData}]
+  {:pre [(s/assert ::chessGame gameMap)
+         ]
+   :post [(s/assert ::chessGame %)]
+   }
+  (-> gameMap
+      (assoc-message (->> gameMap
+                          ::history
+                          reverse
+                          (map print-move)
+                          (interpose \newline)
+                          (apply str)
+                          )
+                     user
+                     )
+      (concat-message "History sent to private message")
+      )
+  )
+
+(defn concede
+  "Accept defeat."
+  [gameMap [] {user :user channel :channel :as metaData}]
+  {:pre [(s/assert ::chessGame gameMap)
+         ]
+   :post [(s/assert ::chessGame %)]
+   }
+  (cond
+    ;; Is the user not playing
+    (not ((set (::players gameMap)) user))
+    (assoc-message gameMap "You are not playing this game!")
+    ;; Is the game in progress?
+    (not (= :playing (::status gameMap)))
+    (assoc-message gameMap "Game is not in progress!")
+    ;; Alright, let a person concede
+    :correct
+    (do
+      ;; Score the game
+      (score-game
+        (remove #{user} (::players gameMap))
+        (::players gameMap)
+        )
+      ;; End the game and return the map
+      (-> gameMap
+          (assoc ::status :over)
+          (assoc-message (str "Player " user " has conceeded."))
           )
       )
     )

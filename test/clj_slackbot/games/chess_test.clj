@@ -18,7 +18,7 @@
   )
 
 ;; Plays a game of chess
-(testing "Testing pawns"
+(testing "Testing game"
   (-> (bot-start)
       (join [] md-a)
       (join [] md-b)
@@ -34,8 +34,12 @@
       (move ["d2" "d3"] md-a)
       (move ["e8" "b5"] md-b)
       (move ["d1" "d2"] md-a)
+      (move ["b5" "c5"] md-b)
+      (concede [] md-b)
+      (history [] md-b)
       ;(#(s/explain ::clj-slackbot.games.chess/chessGame %))
       :message
       ;::chess/history
       )
   )
+
