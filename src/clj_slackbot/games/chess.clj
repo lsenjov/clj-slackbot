@@ -975,14 +975,21 @@
     :as move}]
   {:pre [(s/assert ::move move)]
    :post [(s/valid? string? %)]}
-  (str turn
-       ": "
-       (pos-to-str startPos)
-       (if (= :capture moveType)
-         "x"
-         " "
+  (str turn ": "
+       (cond
+         (= :castleKingside moveType)
+         "O-O"
+         (= :castleQueenside moveType)
+         "O-O-O"
+         :neither
+         (str (pos-to-str startPos)
+              (if (= :capture moveType)
+                "x"
+                " "
+                )
+              (pos-to-str endPos)
+              )
          )
-       (pos-to-str endPos)
        )
   )
 
