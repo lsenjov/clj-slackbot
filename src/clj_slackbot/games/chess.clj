@@ -37,7 +37,7 @@
     5 ":ecorp:"
     6 ":facebook:"
     7 ":google:"
-    8 ":haskell:"
+    8 ":halflife:"
     }
    :file
    {1 ":one:"
@@ -919,7 +919,9 @@
                            )
                       )
                     )
-                  ;(#(if (in-check? % (get-turn-colour %)) (concat-message % "You are in check. Type `,concede` if you are in checkmate or wish to surrener") %))
+                  (#(if (in-check? % (get-turn-colour %))
+                      (concat-message % "You are in check. Type `,concede` if you are in checkmate or wish to surrener")
+                      %))
                   (#(concat-message % (print-board %)))
                   )
               ]
