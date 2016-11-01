@@ -144,14 +144,38 @@
     p
     )
   )
+(defn- get-pieces
+  "Gets all pieces within the square of two positions"
+  [gameMap
+   {fromX ::rank fromY ::file :as pos1}
+   {toX ::rank toY ::file :as pos2}]
+  {:pre [(s/assert ::chessGame gameMap)
+         (s/assert ::position pos1)
+         (s/assert ::position pos2)]
+   :post [(s/valid? (s/coll-of ::piece) %)]}
+  (->>
+    (for [x (make-range (min fromX toX)
+                        (inc (max fromX toX)))
+          y (make-range (min fromY toY)
+                        (inc (max fromY toY)))]
+      (get-piece gameMap (create-position x y)))
+    (remove nil?)
+    )
+  )
 
+(defn- create-position
+  "Short way to create a position from x and y arguments"
+  [^Integer x ^Integer y]
+  {:post [(s/assert ::position %)] }
+  {::rank x ::file y}
+  )
 (defn- create-piece
   "Short way to create a piece from arguments"
   [colour pieceType rank file]
   {:post [(s/assert ::piece %)]}
   {::colour colour
    ::type pieceType
-   ::position {::rank rank ::file file}}
+   ::position (create-position rank file)}
   )
 
 (def ^:private gameStart
@@ -619,7 +643,86 @@
      ::startPosition (::position piece)
      ::endPosition positionTo
      ::moveType (if (get-piece gameMap positionTo) :capture :move)}
-    ;; Castling TODO
+    ;; Castle Kingside White
+    (and (= colour :white)
+         (= fromX 4)
+         (= fromY 1)
+         (= toX 2)
+         (= toY 1)
+         (= :rook (::type (get-piece gameMap
+                                     {::rank 1 ::file 1})))
+         ;; No pieces between rook and king
+         (->> (get-pieces gameMap
+                          (create-position 2 1)
+                          (create-position 3 1))
+              (count)
+              (= 0)
+              )
+         )
+      {::turn (::turn gameMap)
+       ::startPosition (::position piece)
+       ::endPosition positionTo
+       ::moveType :castleKingside}
+    ;; Castle Queenside White
+    (and (= colour :white)
+         (= fromX 4)
+         (= fromY 1)
+         (= toX 6)
+         (= toY 1)
+         (= :rook (::type (get-piece gameMap
+                                     {::rank 8 ::file 1})))
+         ;; No pieces between rook and king
+         (->> (get-pieces gameMap
+                          (create-position 5 1)
+                          (create-position 7 1))
+              (count)
+              (= 0)
+              )
+         )
+      {::turn (::turn gameMap)
+       ::startPosition (::position piece)
+       ::endPosition positionTo
+       ::moveType :castleQueenside}
+    ;; Castle Kingside Black
+    (and (= colour :black)
+         (= fromX 4)
+         (= fromY 8)
+         (= toX 2)
+         (= toY 8)
+         (= :rook (::type (get-piece gameMap
+                                     {::rank 1 ::file 8})))
+         ;; No pieces between rook and king
+         (->> (get-pieces gameMap
+                          (create-position 2 8)
+                          (create-position 3 8))
+              (count)
+              (= 0)
+              )
+         )
+      {::turn (::turn gameMap)
+       ::startPosition (::position piece)
+       ::endPosition positionTo
+       ::moveType :castleKingside}
+    ;; Castle Queenside Black
+    (and (= colour :black)
+         (= fromX 4)
+         (= fromY 8)
+         (= toX 6)
+         (= toY 8)
+         (= :rook (::type (get-piece gameMap
+                                     {::rank 8 ::file 8})))
+         ;; No pieces between rook and king
+         (->> (get-pieces gameMap
+                          (create-position 5 8)
+                          (create-position 7 8))
+              (count)
+              (= 0)
+              )
+         )
+      {::turn (::turn gameMap)
+       ::startPosition (::position piece)
+       ::endPosition positionTo
+       ::moveType :castleQueenside}
     ;; Invalid move
     :invalid-move
     nil
@@ -709,6 +812,34 @@
     )
   )
 
+(defn- check-castling
+  "If m is a valid castling move (and king has already been moved),
+  move the castle in the correct space to the new space"
+  [gameMap m]
+  {:pre [(s/assert ::chessGame gameMap)
+         (s/assert ::move m)]
+   ::post [(s/assert chessGame %)]}
+  (log/trace "check-castling. type is:" (::moveType m))
+  (let [file (if (= :white (::colour m)) 1 8)
+        ]
+    (case (::moveType m)
+      :castleKingside
+      (-> gameMap
+          (place-piece (assoc (get-piece gameMap (create-position 1 file))
+                              ::position
+                              (create-position 3 file)))
+          (remove-piece (create-position 1 file)))
+      :castleQueenside
+      (-> gameMap
+          (place-piece (assoc (get-piece gameMap (create-position 8 file))
+                              ::position
+                              (create-position 5 file)))
+          (remove-piece (create-position 8 file)))
+      gameMap
+      )
+    )
+  )
+
 (defn- move-select
   "Given a correct piece, attempt to make a move"
   [gameMap positionFrom positionTo]
@@ -732,6 +863,7 @@
                   (#(do (log/trace "Piece placed") %))
                   (remove-piece (::position piece))
                   (#(do (log/trace "Old Piece removed") %))
+                  (check-castling m)
                   (update-in [::turn] inc)
                   (assoc-message "Move successful")
                   (#(concat-message % (print-board %)))
@@ -819,7 +951,8 @@
            )
       (assoc-message gameMap "Not your turn")
       ;; Invalid piece
-      (not (= (::colour (get-piece gameMap (str-to-pos firstMove))) (get-turn-colour gameMap)))
+      (not (= (::colour (get-piece gameMap (str-to-pos firstMove)))
+              (get-turn-colour gameMap)))
       (assoc-message gameMap "Not one of your pieces!")
       ;; Try and do things with the piece TODO
       :continue

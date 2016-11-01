@@ -35,11 +35,13 @@
       (move ["e8" "b5"] md-b)
       (move ["d1" "d2"] md-a)
       (move ["b5" "c5"] md-b)
-      (concede [] md-b)
-      (history [] md-b)
+      (move ["b2" "b3"] md-a)
+      (move ["b8" "c6"] md-b)
+      (move ["h2" "h3"] md-a)
+      (move ["d8" "b8"] md-b)
       ;(#(s/explain ::clj-slackbot.games.chess/chessGame %))
       :message
-      ;::chess/history
+      (second) (:message) (#(spit "output.txt" %))
       )
   )
 
