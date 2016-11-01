@@ -29,6 +29,26 @@
    :pawn
    {:black ":chess_pawn_black:"
     :white ":chess_pawn_white:"}
+   :rank
+   {1 ":a:"
+    2 ":b:"
+    3 ":c:"
+    4 ":diamonds:"
+    5 ":ecorp:"
+    6 ":facebook:"
+    7 ":google:"
+    8 ":haskell:"
+    }
+   :file
+   {1 ":one:"
+    2 ":two:"
+    3 ":three:"
+    4 ":four:"
+    5 ":five:"
+    6 ":six:"
+    7 ":seven:"
+    8 ":eight:"
+    }
    }
   )
 (def ^:private gamePiecesChessfaq
@@ -177,6 +197,19 @@
    ::type pieceType
    ::position (create-position rank file)}
   )
+(defn- create-move
+  "Short way to create a move from arguments"
+  [turn startPos endPos moveType]
+  {:pre [(s/assert ::turn turn)
+         (s/assert ::position startPos)
+         (s/assert ::position endPos)
+         (s/assert ::moveType moveType)]
+   :post [(s/assert ::move %)]}
+  {::turn turn
+   ::startPosition startPos
+   ::endPosition endPos
+   ::moveType moveType}
+  )
 
 (def ^:private gameStart
   "The initial list of pieces to add"
@@ -237,15 +270,22 @@
 (defn- print-board
   "Outputs a board in text format for slack"
   [gameMap]
-  (apply str
-         (for [y (range 8 0 -1)]
-           (apply str \newline
-                  (for [x (range 1 9)]
-                    (print-piece gameMap x y)
+  (str
+    (apply str
+           (for [y (range 8 0 -1)]
+             (apply str \newline
+                    (get-in gamePieces [:file y])
+                    (for [x (range 1 9)]
+                      (print-piece gameMap x y)
+                      )
                     )
-                  )
+             )
            )
-         )
+    (apply str
+           \newline
+           ":zero:"
+           (for [x (range 1 9)] (get-in gamePieces [:rank x])))
+    )
   )
 
 (defn- reduce-pieces-chessfaq
@@ -639,10 +679,10 @@
     ;; Is the movement no more than 1?
     (= 1 (max (Math/abs (- fromX toX))
               (Math/abs (- fromY toY))))
-    {::turn (::turn gameMap)
-     ::startPosition (::position piece)
-     ::endPosition positionTo
-     ::moveType (if (get-piece gameMap positionTo) :capture :move)}
+    (create-move (::turn gameMap)
+                 (::position piece)
+                 positionTo
+                 (if (get-piece gameMap positionTo) :capture :move))
     ;; Castle Kingside White
     (and (= colour :white)
          (= fromX 4)
@@ -659,10 +699,10 @@
               (= 0)
               )
          )
-      {::turn (::turn gameMap)
-       ::startPosition (::position piece)
-       ::endPosition positionTo
-       ::moveType :castleKingside}
+    {::turn (::turn gameMap)
+     ::startPosition (::position piece)
+     ::endPosition positionTo
+     ::moveType :castleKingside}
     ;; Castle Queenside White
     (and (= colour :white)
          (= fromX 4)
@@ -679,10 +719,10 @@
               (= 0)
               )
          )
-      {::turn (::turn gameMap)
-       ::startPosition (::position piece)
-       ::endPosition positionTo
-       ::moveType :castleQueenside}
+    {::turn (::turn gameMap)
+     ::startPosition (::position piece)
+     ::endPosition positionTo
+     ::moveType :castleQueenside}
     ;; Castle Kingside Black
     (and (= colour :black)
          (= fromX 4)
@@ -699,10 +739,10 @@
               (= 0)
               )
          )
-      {::turn (::turn gameMap)
-       ::startPosition (::position piece)
-       ::endPosition positionTo
-       ::moveType :castleKingside}
+    {::turn (::turn gameMap)
+     ::startPosition (::position piece)
+     ::endPosition positionTo
+     ::moveType :castleKingside}
     ;; Castle Queenside Black
     (and (= colour :black)
          (= fromX 4)
@@ -719,15 +759,15 @@
               (= 0)
               )
          )
-      {::turn (::turn gameMap)
-       ::startPosition (::position piece)
-       ::endPosition positionTo
-       ::moveType :castleQueenside}
+    {::turn (::turn gameMap)
+     ::startPosition (::position piece)
+     ::endPosition positionTo
+     ::moveType :castleQueenside}
     ;; Invalid move
     :invalid-move
     nil
     )
-  )
+)
 
 (defn- remove-piece
   "Clears a position on the gameboard"
@@ -865,7 +905,20 @@
                   (#(do (log/trace "Old Piece removed") %))
                   (check-castling m)
                   (update-in [::turn] inc)
+                  (#(do (log/trace "Game state done, adding messages") %))
                   (assoc-message "Move successful")
+                  (#(concat-message
+                      %
+                      (str "Player " (-> %
+                                         ::colours
+                                         ((get-turn-colour %))
+                                         )
+                           " to play as colour "
+                           (name (get-turn-colour %))
+                           )
+                      )
+                    )
+                  ;(#(if (in-check? % (get-turn-colour %)) (concat-message % "You are in check. Type `,concede` if you are in checkmate or wish to surrener") %))
                   (#(concat-message % (print-board %)))
                   )
               ]
