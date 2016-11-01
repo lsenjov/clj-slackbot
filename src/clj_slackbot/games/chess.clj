@@ -141,6 +141,40 @@
           )
   )
 
+(defn- make-range
+  "Makes a range from start (inclusive) to fin (exclusive), with a step of 1.
+  Accounts for fin being less than start, and may make the step -1"
+  [^Integer start ^Integer fin]
+  (range start fin (if (> fin start) 1 -1))
+  )
+(defn- create-position
+  "Short way to create a position from x and y arguments"
+  [^Integer x ^Integer y]
+  {:post [(s/assert ::position %)] }
+  {::rank x ::file y}
+  )
+(defn- create-piece
+  "Short way to create a piece from arguments"
+  [colour pieceType rank file]
+  {:post [(s/assert ::piece %)]}
+  {::colour colour
+   ::type pieceType
+   ::position (create-position rank file)}
+  )
+(defn- create-move
+  "Short way to create a move from arguments"
+  [turn startPos endPos moveType]
+  {:pre [(s/assert ::turn turn)
+         (s/assert ::position startPos)
+         (s/assert ::position endPos)
+         (s/assert ::moveType moveType)]
+   :post [(s/assert ::move %)]}
+  {::turn turn
+   ::startPosition startPos
+   ::endPosition endPos
+   ::moveType moveType}
+  )
+
 (defn- place-piece
   "Places a piece on the gameboard"
   [gameMap {{rank ::rank file ::file} ::position :as piece}]
@@ -181,34 +215,6 @@
       (get-piece gameMap (create-position x y)))
     (remove nil?)
     )
-  )
-
-(defn- create-position
-  "Short way to create a position from x and y arguments"
-  [^Integer x ^Integer y]
-  {:post [(s/assert ::position %)] }
-  {::rank x ::file y}
-  )
-(defn- create-piece
-  "Short way to create a piece from arguments"
-  [colour pieceType rank file]
-  {:post [(s/assert ::piece %)]}
-  {::colour colour
-   ::type pieceType
-   ::position (create-position rank file)}
-  )
-(defn- create-move
-  "Short way to create a move from arguments"
-  [turn startPos endPos moveType]
-  {:pre [(s/assert ::turn turn)
-         (s/assert ::position startPos)
-         (s/assert ::position endPos)
-         (s/assert ::moveType moveType)]
-   :post [(s/assert ::move %)]}
-  {::turn turn
-   ::startPosition startPos
-   ::endPosition endPos
-   ::moveType moveType}
   )
 
 (def ^:private gameStart
@@ -435,12 +441,6 @@
    }
   (str (char (+ (dec (int \a)) (::rank pos)))
        (char (+ (int \0) (::file pos))))
-  )
-(defn- make-range
-  "Makes a range from start (inclusive) to fin (exclusive), with a step of 1.
-  Accounts for fin being less than start, and may make the step -1"
-  [^Integer start ^Integer fin]
-  (range start fin (if (> fin start) 1 -1))
   )
 
 (defn- move-pawn-valid?
