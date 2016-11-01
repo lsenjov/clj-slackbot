@@ -859,9 +859,10 @@
   {:pre [(s/assert ::chessGame gameMap)
          (s/assert ::move m)]
    ::post [(s/assert chessGame %)]}
-  (log/trace "check-castling. type is:" (::moveType m))
-  (let [file (if (= :white (::colour m)) 1 8)
+  (let [file (if (= :white (get-turn-colour gameMap)) 1 8)
         ]
+    (log/info "check-castling."
+              "file is:" file)
     (case (::moveType m)
       :castleKingside
       (-> gameMap
