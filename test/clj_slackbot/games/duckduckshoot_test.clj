@@ -22,6 +22,10 @@
   (assoc md-a :user "@c")
   )
 
+(def md-d
+  "Metadata for player c"
+  (assoc md-a :user "@d")
+  )
 
 (testing "Testing game"
   (-> (bot-start)
@@ -30,6 +34,10 @@
       (join [] md-c)
       (assoc :message '({:message "Remove later"}))
       (start [] md-a)
-      ;(shoot [] md-a)
+      (shoot ["@b"] md-a)
+      (duck [] md-b)
+      (shoot ["@a"] md-c)
+
+      ;:message
       )
   )

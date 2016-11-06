@@ -101,7 +101,7 @@
       (concat-message (str "Round " (::turn gameMap) " begin."))
       (concat-message (apply str "Living players: " (interpose ", " (get-alive-players gameMap))))
       ((apply comp (for [p (get-alive-players gameMap)]
-                     (fn [gm] (concat-message gm (str "Either `," channel " duck` or `," channel " shoot @player`") p)))))
+                     (fn [gm] (concat-message gm (str "Either `," channel " duck` or `," channel " shoot @player`. You have " (get-in gameMap [::players p ::ducks]) " ducks remaining.") p)))))
       )
   )
 (defn- new-round
@@ -171,9 +171,83 @@
        )
   )
 
+(defn- end-round
+  "Ends the round and calculates shots/ducks"
+  [gameMap]
+  {:pre [(s/assert ::gameMap gameMap)]
+   :post [(s/assert ::gameMap %)]}
+  (log/trace "end-round triggered.")
+  gameMap ;; TODO
+  )
+
+(defn- trigger-action
+  "Checks everyone has made an action, and if so, go wild"
+  [gameMap]
+  {:pre [(s/assert ::gameMap gameMap)]
+   :post [(s/assert ::gameMap %)]}
+  (->> gameMap
+       ::actions
+       (filter (fn [[k v]] (= (::actionType v) :nothing)))
+       (count)
+       (#(do (log/trace "trigger-action. Nothing counts:" %) %))
+       (= 0)
+       (
+        #(if %
+           (end-round gameMap)
+           gameMap
+           )
+        )
+       )
+  )
+
 (defn shoot
   "Take a shot at another player"
-  [gameMap commands {user :user channel :channel :as metaData}]
+  [gameMap [target & _] {user :user channel :channel :as metaData}]
+  {:pre [(s/assert ::gameMap gameMap)]
+   :post [(s/assert ::gameMap %)]}
+  (cond
+    ;; Game hasn't started
+    (not (= :playing (::status gameMap)))
+    (assoc-message gameMap "Game is not in progress." user)
+    ;; Not actually a player
+    (not (get-in gameMap [::players user ::alive?]))
+    (assoc-message gameMap "You are not alive to shoot!" user)
+    ;; Target isn't alive
+    (not (get-in gameMap [::players target ::alive?]))
+    (assoc-message gameMap (str target " isn't a living player.") user)
+    ;; Prepare the shot
+    :good-shot
+    (-> gameMap
+        (assoc-in [::actions user]
+                  {::actionType :shoot
+                   ::player target}
+                  )
+        (assoc-message (str "Preparing to shoot " target) user)
+        (trigger-action)
+        )
+    )
+  )
+
+(defn duck
+  "Duck from people shooting at you."
+  [gameMap [target & _] {user :user channel :channel :as metaData}]
   {:pre [(s/assert ::gameMap gameMap)]}
-  gameMap
+  (cond
+    ;; Game hasn't started
+    (not (= :playing (::status gameMap)))
+    (assoc-message gameMap "Game is not in progress." user)
+    ;; Not actually a player
+    (not (get-in gameMap [::players user ::alive?]))
+    (assoc-message gameMap "You are not alive to shoot!" user)
+    ;; No ducks remaining
+    (= 0 (get-in gameMap [::players user ::ducks]))
+    (assoc-message gameMap "You can't duck any more!")
+    ;; Duck!
+    :duck
+    (-> gameMap
+        (assoc-in [::actions user ::actionType] :duck)
+        (assoc-message "You are ducking." user)
+        (trigger-action)
+        )
+    )
   )
