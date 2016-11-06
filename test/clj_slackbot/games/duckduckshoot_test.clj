@@ -38,6 +38,6 @@
       (duck [] md-b)
       (shoot ["@a"] md-c)
 
-      ;:message
+      :message
       )
   )

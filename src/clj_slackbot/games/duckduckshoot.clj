@@ -86,7 +86,7 @@
   {:pre [(s/assert ::gameMap gameMap)]
    :post [(s/valid? (s/coll-of ::player) %)]}
   (->> players
-       (filter second)
+       (filter #(->> % val ::alive?))
        keys
        (#(do (log/trace "Alive players:" (into [] %)) %))
        )
@@ -171,18 +171,64 @@
        )
   )
 
+(defn- player-action
+  "Returns a function of a single player's action"
+  [[player {actionType ::actionType target ::player}]]
+  {:pre [(s/assert ::player player)
+         (s/assert ::actionType actionType)
+         (s/valid? (s/or :nil nil?
+                         :player ::player)
+                   target)]}
+  (cond
+    ;; Player failed to do anything
+    (= actionType :nothing)
+    (fn [gameMap]
+      (concat-message gameMap (str player " did nothing.")))
+    ;; Player shot at someone
+    (= actionType :shoot)
+    (fn [gameMap]
+      (if (= :duck (get-in gameMap [::actions target ::actionType]))
+        ;; Target ducked
+        (concat-message gameMap (str player " shot at " target " but they ducked."))
+        ;; Target was hit
+        (-> gameMap
+            (concat-message (str player " shot " target "."))
+            (assoc-in [::players target ::alive?] false)
+            )
+        )
+      )
+    ;; Player ducked
+    (= actionType :duck)
+    (fn [gameMap]
+      (-> gameMap
+          (concat-message (str player " ducked."))
+          (update-in [::players player ::ducks] dec)
+          )
+      )
+    ;; Not found
+    :not-found
+    (fn [gameMap]
+      (log/error "player-action. Should not reach here!")
+      gameMap
+      )
+    )
+  )
+
 (defn- end-round
   "Ends the round and calculates shots/ducks"
-  [gameMap]
+  [gameMap channel]
   {:pre [(s/assert ::gameMap gameMap)]
    :post [(s/assert ::gameMap %)]}
   (log/trace "end-round triggered.")
-  gameMap ;; TODO
+  (-> gameMap
+      ((apply comp (map player-action (::actions gameMap))))
+      (new-round channel)
+      )
   )
 
 (defn- trigger-action
   "Checks everyone has made an action, and if so, go wild"
-  [gameMap]
+  [gameMap channel]
   {:pre [(s/assert ::gameMap gameMap)]
    :post [(s/assert ::gameMap %)]}
   (->> gameMap
@@ -193,7 +239,7 @@
        (= 0)
        (
         #(if %
-           (end-round gameMap)
+           (end-round gameMap channel)
            gameMap
            )
         )
@@ -223,7 +269,7 @@
                    ::player target}
                   )
         (assoc-message (str "Preparing to shoot " target) user)
-        (trigger-action)
+        (trigger-action channel)
         )
     )
   )
@@ -247,7 +293,7 @@
     (-> gameMap
         (assoc-in [::actions user ::actionType] :duck)
         (assoc-message "You are ducking." user)
-        (trigger-action)
+        (trigger-action channel)
         )
     )
   )

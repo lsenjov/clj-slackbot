@@ -4,10 +4,11 @@
             [clj-slackbot.helpers :as helpers]
 
             ;; Add games below here
-            [clj-slackbot.games.testGame :as testGame]
-            [clj-slackbot.games.werewolf :as werewolf]
-            [clj-slackbot.games.spyfall :as spyfall]
-            [clj-slackbot.games.chess :as chess]
+            [clj-slackbot.games.testGame]
+            [clj-slackbot.games.werewolf]
+            [clj-slackbot.games.spyfall]
+            [clj-slackbot.games.chess]
+            [clj-slackbot.games.duckduckshoot]
             )
   )
 
