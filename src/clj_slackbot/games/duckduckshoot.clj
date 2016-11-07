@@ -214,6 +214,36 @@
     )
   )
 
+(defn- check-round-end
+  "Checks if the game is to end. If true, ends the game. If false, triggers a new round."
+  [gameMap channel]
+  {:pre [(s/assert ::gameMap gameMap)]
+   :post [(s/assert ::gameMap %)]}
+  (let [playerCount (count (get-alive-players gameMap))]
+    (cond
+      ;; Everybody's dead dave
+      (= playerCount 0)
+      (-> gameMap
+          (assoc ::status :over)
+          (concat-message "Everybody's dead dave! Game over!")
+          )
+      ;; One or two players left
+      (<= playerCount 2)
+      (do
+        (score-game (get-alive-players gameMap) (-> gameMap ::players keys))
+        (-> gameMap
+            (assoc ::status :over)
+            (concat-message "Game over!")
+            (concat-message (apply str "Winners are: " (interpose ", " (get-alive-players gameMap))))
+            )
+        )
+      ;; Continue
+      :next-round
+      (new-round gameMap channel)
+      )
+    )
+  )
+
 (defn- end-round
   "Ends the round and calculates shots/ducks"
   [gameMap channel]
@@ -222,7 +252,7 @@
   (log/trace "end-round triggered.")
   (-> gameMap
       ((apply comp (map player-action (::actions gameMap))))
-      (new-round channel)
+      (check-round-end channel)
       )
   )
 

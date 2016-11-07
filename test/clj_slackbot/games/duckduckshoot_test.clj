@@ -27,6 +27,9 @@
   (assoc md-a :user "@d")
   )
 
+;; Check asserts, so any failure to conform to spec is reported
+(s/check-asserts true)
+
 (testing "Testing game"
   (-> (bot-start)
       (join [] md-a)
