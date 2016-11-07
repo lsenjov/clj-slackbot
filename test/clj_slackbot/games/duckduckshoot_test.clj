@@ -38,7 +38,7 @@
       (assoc :message '({:message "Remove later"}))
       (start [] md-a)
       (shoot ["@b"] md-a)
-      (duck [] md-b)
+      (shoot ["@c"] md-b)
       (shoot ["@a"] md-c)
 
       :message

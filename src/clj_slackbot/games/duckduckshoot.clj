@@ -85,10 +85,13 @@
   [{players ::players :as gameMap}]
   {:pre [(s/assert ::gameMap gameMap)]
    :post [(s/valid? (s/coll-of ::player) %)]}
+  (log/trace "get-alive-players. Players:" players)
   (->> players
        (filter #(->> % val ::alive?))
        keys
-       (#(do (log/trace "Alive players:" (into [] %)) %))
+       (into [])
+       (#(do (log/trace "Alive players:" %)
+             %))
        )
   )
 (defn- concat-new-round-messages
