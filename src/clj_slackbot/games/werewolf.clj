@@ -172,7 +172,7 @@
   "Returns a map of player to action value, for all players who have that action"
   [actionMap action]
   (apply merge {}
-         (map 
+         (map
            (fn [[n m]] {n (get m action)})
            (filter (fn [[_ v]] (some #{action} (keys v))) actionMap) ;; Returns list of k-v vectors
            )))
@@ -200,7 +200,7 @@
   (log/trace "display-votes. actions:" actions)
   (concat-message gameMap
                   (apply str
-                         "Current vote totals: "
+                         "Current vote totals:\n"
                          (->> (show-votes actions :vote)
                              (map (fn [[k v]] (str "Voting for: "
                                                    (if k k "Noone")
@@ -228,7 +228,7 @@
     (if (get-in gameMap [:players user])
       (assoc gameMap :message (str "You have already joined this game " user))
       (do
-        (-> gameMap 
+        (-> gameMap
             (assoc-in [:players user] {:alive true})
             (assoc-message (str user " has joined the game."))
             )))
@@ -480,7 +480,10 @@
              ;; Highest person gets deaded
              (-> gameMap
                  (assoc-in [:players n :alive] false)
-                 (concat-message (str n " was killed during the night."))))
+                 (concat-message (str n " was killed during the night."))
+                 (concat-message (str n "'s role was:" (name (get-in gameMap [:players n :role]))))
+                 )
+             )
     ;; Nothing should be done here, just return the map
     gameMap))
 (defn- show-summary
