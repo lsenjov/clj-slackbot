@@ -535,37 +535,47 @@
     (let [wc (if wolves wolves 0)
           tc (if town town 0)]
       (log/trace "check-win-conditions. wc:" wc "tc:" tc)
-      (if (= 0 wc)
+      (cond
+        ;; Wolves are all dead
+        (= 0 wc)
         (-> gameMap
             (assoc :status :end)
             (concat-message "All the wolves are dead! The villagers win!")
             (concat-message (show-summary gameMap))
             (score-by-side :town)
             )
-        (if (>= wc tc)
-          (-> gameMap
-              (assoc :status :end)
-              (concat-message "The wolves outnumber the townsfolk! The wolves win!")
-              (concat-message (show-summary gameMap))
-              (score-by-side :wolves)
-              )
-          (if (= (:tanner (get-count-by-role gameMap)) (:tanner (get-count-by-role-all gameMap)))
-            ;; No-one has won, it is a new day
-            (-> gameMap
-                (concat-message (case status
-                                  :first-night "It is now the first night."
-                                  :night "It is now night time."
-                                  :day "It is now daytime."
-                                  :end "The game has ended."
-                                  "ERROR: This shouldn't be showing here."))
-                )
-            (-> gameMap
-                (assoc :status :end)
-                (concat-message "The tanner has died! The tanner wins!")
-                (concat-message (show-summary gameMap))
-                (score-by-role :tanner)
-                )
-            ))))))
+        ;; Tanner exists and is dead
+        (not (=
+              ;; Tanner exists
+              (:tanner (get-count-by-role gameMap))
+              ;; Tanner is alive
+              (:tanner (get-count-by-role-all gameMap))
+              ))
+        (-> gameMap
+            (assoc :status :end)
+            (concat-message "The tanner has died! The tanner wins!")
+            (concat-message (show-summary gameMap))
+            (score-by-role :tanner)
+            )
+        ;; Wolves equal or outnumber townies
+        (>= wc tc)
+        (-> gameMap
+            (assoc :status :end)
+            (concat-message "The wolves outnumber the townsfolk! The wolves win!")
+            (concat-message (show-summary gameMap))
+            (score-by-side :wolves)
+            )
+        ;; No-one has won, it is a new day
+        :newday
+        (-> gameMap
+            (concat-message (case status
+                              :first-night "It is now the first night."
+                              :night "It is now night time."
+                              :day "It is now daytime."
+                              :end "The game has ended."
+                              "ERROR: This shouldn't be showing here."))
+            )
+        ))))
 (defn- check-and-trigger-change
   "Checks for all actions complete. If true, change from night to day or day to night, re-do actions"
   [{status :status :as gameMap} commands {user :user channel :channel :as metaData}]
