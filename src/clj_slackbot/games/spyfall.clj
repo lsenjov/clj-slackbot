@@ -108,9 +108,15 @@
                            ".\n"
                            "Still to vote:"
                            (apply str (interpose ", " (get-in gameMap [:accusing :remaining]))))
-                      "Game is underway.")
+                      (str "Game is underway.\n"
+                           "Players: "
+                           (apply str (interpose ", " (keys (gameMap :players))))
+                           )
+                      )
            :ended "The game has ended."
-           "ERROR: Unknown Status")))
+           "ERROR: Unknown Status")
+         )
+  )
 
 (defn- give-roles
   "Assigns the list of roles to a playermap, plus a separate spy action"
