@@ -70,15 +70,6 @@
         ;; Returns message
         (assoc :message (str user " has left the game.")))
     (assoc :message (str user " was not playing anyway."))))
-(defn status
-  "Show status of the current game"
-  [gameMap commands {user :user channel :channel :as metaData}]
-  (assoc gameMap :message
-         (case (::status gameMap)
-           "waiting" (str "Waiting for players. Current players:"
-                          (apply str
-                                 (interpose ", " (keys (gameMap ::players)))))
-           "ERROR: Unknown Status")))
 
 (defn- get-alive-players
   "Returns a list of all alive players"
@@ -94,6 +85,18 @@
              %))
        )
   )
+(defn status
+  "Show status of the current game"
+  [gameMap commands {user :user channel :channel :as metaData}]
+  (assoc gameMap :message
+         (case (::status gameMap)
+           :waiting (str "Waiting for players. Current players:"
+                          (apply str
+                                 (interpose ", " (keys (gameMap ::players)))))
+           :playing (str "Waiting for players to shoot and duck!\n"
+                         (get-alive-players gameMap))
+           :over "Game finished!"
+           "ERROR: Unknown Status")))
 (defn- concat-new-round-messages
   "Concats new messages"
   [{players ::players :as gameMap} channel]

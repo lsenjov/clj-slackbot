@@ -360,7 +360,7 @@
       (not (= (first target) \@))
       (recur gameMap [(str \@ target)] metaData)
       ;; Player can't accuse
-      (not (get-in gameMap [:player user :actions :accuse]))
+      (not (get-in gameMap [:players user :actions :accuse]))
       (assoc gameMap :message "You are unable to accuse anyone")
       ;; Target is not in the list of players
       (not (players target))
