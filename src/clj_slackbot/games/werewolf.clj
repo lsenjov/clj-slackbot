@@ -643,22 +643,29 @@
   "Checks to see if voting is allowed at this point"
   [{players :players :as gameMap} [target] {user :user channel :channel :as metaData}]
   (log/trace "vote-inner. target:" target)
-  (if (has-action? gameMap user :vote)
-    (if (or (is-alive? gameMap target)
-            (= "clear" target))
-      (if (= "clear" target)
-        (-> gameMap
-            (set-role-action user :vote nil)
-            (assoc-message (str user " cleared their vote."))
-            (display-votes))
-        (-> gameMap
-            (set-role-action user :vote target)
-            (assoc-message (str user " has voted to lynch " target))
-            (display-votes))
-        )
-      (assoc-message gameMap "Invalid target")
-      )
-    (assoc-message gameMap "You cannot vote right now"))
+  (cond
+    ;; User can't vote
+    (not (has-action? gameMap user :vote))
+    (assoc-message gameMap "You cannot vote right now")
+    ;; User can't vote for themselves
+    (= target user)
+    (assoc-message gameMap "You cannot vote for yourself")
+    ;; Clearing vote
+    (= target "clear")
+    (-> gameMap
+        (set-role-action user :vote nil)
+        (assoc-message (str user " cleared their vote."))
+        (display-votes))
+    ;; Not a valid target
+    (not (is-alive? gameMap target))
+    (assoc-message gameMap "Invalid target")
+    ;; Valid
+    :valid
+    (-> gameMap
+        (set-role-action user :vote target)
+        (assoc-message (str user " has voted to lynch " target))
+        (display-votes))
+    )
   )
 (defn vote
   "Vote for someone during the daytime. Call `vote clear` to remove your vote"
