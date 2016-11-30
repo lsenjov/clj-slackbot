@@ -320,7 +320,8 @@
       (= "Spy" (get-in outMap [:players target :role]))
       (let [out (-> outMap
                     (assoc :status :ended)
-                    (assoc :message "The spy was caught!")
+                    (helpers/assoc-message "The spy was caught!")
+                    (helpers/assoc-message (str "The location was: " (get-in gameData [(:location gameMap) :name])))
                     )]
         (score-game out target false)
         out)
@@ -329,7 +330,8 @@
       (let [spy (get-spy outMap)
             out (-> outMap
                     (assoc :status :ended)
-                    (assoc :message (str "The spy was actually " spy))
+                    (helpers/assoc-message (str "The spy was actually " spy))
+                    (helpers/assoc-message (str "The location was: " (get-in gameData [(:location gameMap) :name])))
                     )]
         (log/trace "Found spy as:" spy)
         (score-game out spy true)
